@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Submini">
+<title>Submini 音乐</title>
+<style>
+  /* Palette lifted from subgram's web UI (dark, mint accent #7dd3c0),
+     simplified for iOS 9: no flex/grid/gap, floats only. */
+  * { -webkit-tap-highlight-color: rgba(255,255,255,0.08); }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #0b0d12; color: #eef0f4; font-size: 16px; padding-bottom: 128px; }
+  button { font-family: inherit; cursor: pointer; }
+  /* ---------- login ---------- */
+  #loginView { max-width: 420px; margin: 60px auto 0 auto; padding: 0 24px; }
+  #loginView h1 { font-size: 26px; text-align: center; margin: 0 0 6px 0; }
+  #loginView .sub { text-align: center; color: rgba(238,240,244,0.6); font-size: 14px; margin-bottom: 28px; }
+  #loginView label { display: block; font-size: 14px; color: rgba(238,240,244,0.6); margin: 14px 0 6px 0; }
+  #loginView input { width: 100%; box-sizing: border-box; font-size: 17px; padding: 12px;
+                     border: 1px solid rgba(255,255,255,0.14); border-radius: 8px;
+                     background: #171a21; color: #eef0f4; }
+  #loginBtn { width: 100%; margin-top: 22px; font-size: 18px; padding: 13px 0;
+              background: #7dd3c0; color: #0b0d12; font-weight: bold; border: none; border-radius: 8px; }
+  #loginMsg { color: #ff6b6b; font-size: 14px; text-align: center; min-height: 20px; margin-top: 12px; }
+  /* ---------- app frame ---------- */
+  #tabs { position: fixed; top: 0; left: 0; right: 0; background: #171a21; z-index: 10;
+          overflow: hidden; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  #tabs button { float: left; background: none; border: none; color: rgba(238,240,244,0.6);
+                 font-size: 16px; padding: 13px 10px; }
+  #tabs button.on { color: #eef0f4; font-weight: bold; border-bottom: 3px solid #7dd3c0; }
+  #tabs #logoutBtn { float: right; color: rgba(238,240,244,0.4); font-size: 14px; }
+  #main { margin-top: 51px; }
+  #searchBar { padding: 10px 12px; background: #171a21; overflow: hidden; display: none; }
+  #searchInput { float: left; width: 76%; box-sizing: border-box; font-size: 16px;
+                 padding: 10px; border: 1px solid rgba(255,255,255,0.14); border-radius: 8px;
+                 background: #21252f; color: #eef0f4; }
+  #searchBtn { float: right; width: 21%; font-size: 16px; padding: 10px 0;
+               background: #7dd3c0; color: #0b0d12; font-weight: bold; border: none; border-radius: 8px; }
+  #crumb { overflow: hidden; padding: 8px 12px; background: #171a21;
+           border-bottom: 1px solid rgba(255,255,255,0.1); display: none; }
+  #backBtn { float: left; background: none; border: none; color: #7dd3c0; font-size: 16px; padding: 4px 8px 4px 0; }
+  #crumbTitle { font-size: 16px; font-weight: bold; line-height: 28px; white-space: nowrap;
+                overflow: hidden; text-overflow: ellipsis; }
+  #status { padding: 10px 14px; color: rgba(238,240,244,0.6); font-size: 14px; display: none; }
+  #status.err { color: #ff6b6b; }
+  /* ---------- lists ---------- */
+  ul#list { list-style: none; margin: 0; padding: 0; }
+  ul#list li { border-bottom: 1px solid rgba(255,255,255,0.07); padding: 12px 14px; overflow: hidden;
+               min-height: 44px; box-sizing: border-box; }
+  ul#list li .t { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  ul#list li .s { font-size: 13px; color: rgba(238,240,244,0.55); margin-top: 3px; white-space: nowrap;
+                  overflow: hidden; text-overflow: ellipsis; }
+  ul#list li img { float: left; width: 48px; height: 48px; margin-right: 12px; border-radius: 4px;
+                   background: #21252f; }
+  ul#list li.playing .t { color: #7dd3c0; font-weight: bold; }
+  ul#list li.section { background: #171a21; color: rgba(238,240,244,0.6); font-size: 13px; min-height: 0;
+                       padding: 7px 14px; font-weight: bold; }
+  ul#list li .go { float: right; color: rgba(255,255,255,0.25); font-size: 20px; line-height: 44px; }
+  /* ---------- player bar ---------- */
+  #player { position: fixed; left: 0; right: 0; bottom: 0; background: #171a21; color: #eef0f4;
+            z-index: 10; padding: 8px 10px 10px 10px; border-top: 1px solid rgba(255,255,255,0.12); }
+  #npRow { overflow: hidden; }
+  #npCover { float: left; width: 52px; height: 52px; border-radius: 4px; background: #21252f;
+             margin-right: 10px; }
+  #npInfo { overflow: hidden; padding-top: 4px; }
+  #npTitle { font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden;
+             text-overflow: ellipsis; }
+  #npArtist { font-size: 13px; color: rgba(238,240,244,0.6); white-space: nowrap; overflow: hidden;
+              text-overflow: ellipsis; margin-top: 2px; }
+  #ctlRow { overflow: hidden; margin-top: 6px; }
+  #ctlRow .btns { float: left; }
+  #ctlRow button { background: none; border: none; color: #eef0f4; font-size: 27px;
+                   padding: 4px 14px; }
+  #ctlRow button:active { color: #7dd3c0; }
+  #timeBox { float: right; color: rgba(238,240,244,0.6); font-size: 13px; line-height: 42px; }
+  #progWrap { margin-top: 8px; background: rgba(255,255,255,0.15); height: 8px; border-radius: 4px; }
+  #progFill { background: #7dd3c0; height: 8px; border-radius: 4px; width: 0%; }
+</style>
+</head>
+<body>
+
+<div id="loginView">
+  <h1>Submini</h1>
+  <div class="sub">为老 iPad 准备的极简音乐播放器</div>
+  <label for="user">用户名</label>
+  <input id="user" type="text" autocapitalize="off" autocorrect="off" autocomplete="username">
+  <label for="pass">密码</label>
+  <input id="pass" type="password" autocomplete="current-password">
+  <button id="loginBtn">登 录</button>
+  <div id="loginMsg"></div>
+</div>
+
+<div id="appView" style="display:none">
+  <div id="tabs">
+    <button id="tabPlaylists">歌单</button>
+    <button id="tabAlbums">专辑</button>
+    <button id="tabArtists">歌手</button>
+    <button id="tabRandom">随机</button>
+    <button id="tabSearch">搜索</button>
+    <button id="logoutBtn">退出</button>
+  </div>
+  <div id="main">
+    <div id="searchBar">
+      <input id="searchInput" type="search" placeholder="搜索歌曲 / 专辑 / 歌手">
+      <button id="searchBtn">搜索</button>
+    </div>
+    <div id="crumb"><button id="backBtn">‹ 返回</button><div id="crumbTitle"></div></div>
+    <div id="status"></div>
+    <ul id="list"></ul>
+  </div>
+  <div id="player">
+    <div id="npRow">
+      <img id="npCover" alt="">
+      <div id="npInfo">
+        <div id="npTitle">未播放</div>
+        <div id="npArtist">点一首歌开始</div>
+      </div>
+    </div>
+    <div id="progWrap"><div id="progFill"></div></div>
+    <div id="ctlRow">
+      <div class="btns">
+        <button id="prevBtn">⏮</button>
+        <button id="playBtn">▶</button>
+        <button id="nextBtn">⏭</button>
+      </div>
+      <div id="timeBox"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
+    </div>
+  </div>
+</div>
+
+<audio id="audio" preload="auto"></audio>
+<script>
+/* ================= MD5 (RFC 1321), ES5, UTF-8 aware ================= */
+function md5hex(input) {
+  var s = unescape(encodeURIComponent(input));
+  var len = s.length;
+  var bytes = [];
+  var i, j;
+  for (i = 0; i < len; i++) bytes.push(s.charCodeAt(i) & 0xff);
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  var bitLen = len * 8;
+  for (i = 0; i < 4; i++) { bytes.push(bitLen & 0xff); bitLen = Math.floor(bitLen / 256); }
+  for (i = 0; i < 4; i++) bytes.push(0);
+  var K = [];
+  for (i = 0; i < 64; i++) K.push(Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296));
+  var S = [7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+           5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+           4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+           6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21];
+  var a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
+  function rotl(x, n) { return (x << n) | (x >>> (32 - n)); }
+  function wordAt(off) {
+    return (bytes[off] | (bytes[off + 1] << 8) | (bytes[off + 2] << 16) | (bytes[off + 3] << 24)) >>> 0;
+  }
+  for (j = 0; j < bytes.length; j += 64) {
+    var A = a0, B = b0, C = c0, D = d0;
+    for (i = 0; i < 64; i++) {
+      var F, g;
+      if (i < 16)      { F = (B & C) | (~B & D); g = i; }
+      else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
+      else if (i < 48) { F = B ^ C ^ D;          g = (3 * i + 5) % 16; }
+      else             { F = C ^ (B | ~D);       g = (7 * i) % 16; }
+      var tmp = D;
+      D = C; C = B;
+      B = (B + rotl((A + F + K[i] + wordAt(j + g * 4)) | 0, S[i])) | 0;
+      A = tmp;
+    }
+    a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
+  }
+  function hexw(w) {
+    var out = '', k, b;
+    for (k = 0; k < 4; k++) {
+      b = (w >>> (k * 8)) & 0xff;
+      out += (b < 16 ? '0' : '') + b.toString(16);
+    }
+    return out;
+  }
+  return hexw(a0) + hexw(b0) + hexw(c0) + hexw(d0);
+}
+
+/* ================= Subsonic API layer ================= */
+var CLIENT = 'submini', APIV = '1.16.1';
+var auth = null;
+function $(id) { return document.getElementById(id); }
+function asArray(x) {
+  if (!x) return [];
+  if (Object.prototype.toString.call(x) === '[object Array]') return x;
+  return [x];
+}
+function makeSalt() {
+  var chars = 'abcdefghijklmnopqrstuvwxyz0123456789', out = '', i;
+  for (i = 0; i < 12; i++) out += chars.charAt(Math.floor(Math.random() * chars.length));
+  return out;
+}
+function restUrl(endpoint, params, json) {
+  var q = [];
+  var k;
+  for (k in params) {
+    if (params.hasOwnProperty(k)) q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
+  }
+  q.push('u=' + encodeURIComponent(auth.u));
+  q.push('t=' + encodeURIComponent(auth.t));
+  q.push('s=' + encodeURIComponent(auth.s));
+  q.push('v=' + APIV);
+  q.push('c=' + CLIENT);
+  if (json) q.push('f=json');
+  return '/rest/' + endpoint + '.view?' + q.join('&');
+}
+function api(endpoint, params, ok, fail) {
+  setStatus('加载中…', false);
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', restUrl(endpoint, params, true), true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status !== 200) { setStatus('请求失败（HTTP ' + xhr.status + '）', true); if (fail) fail(); return; }
+    var data;
+    try { data = JSON.parse(xhr.responseText); } catch (e) { setStatus('服务器响应无法解析', true); if (fail) fail(); return; }
+    var root = data['subsonic-response'];
+    if (!root || root.status !== 'ok') {
+      var msg = (root && root.error && root.error.message) ? root.error.message : '未知错误';
+      setStatus('服务器错误：' + msg, true);
+      if (fail) fail(root);
+      return;
+    }
+    setStatus('', false);
+    ok(root);
+  };
+  xhr.send(null);
+}
+function streamUrl(id) { return restUrl('stream', { id: id, format: 'mp3' }, false); }
+function coverUrl(id) { return restUrl('getCoverArt', { id: id, size: 144 }, false); }
+
+/* ================= UI helpers ================= */
+function fmtTime(sec) {
+  if (!sec || !isFinite(sec)) return '0:00';
+  sec = Math.floor(sec);
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+function setStatus(msg, isErr) {
+  var el = $('status');
+  el.innerHTML = '';
+  if (!msg) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.className = isErr ? 'err' : '';
+  el.appendChild(document.createTextNode(msg));
+}
+var navStack = [];
+function clearList() { var l = $('list'); while (l.firstChild) l.removeChild(l.firstChild); }
+function showCrumb(title) {
+  if (navStack.length > 0) {
+    $('crumb').style.display = 'block';
+    $('crumbTitle').innerHTML = '';
+    $('crumbTitle').appendChild(document.createTextNode(title || ''));
+  } else {
+    $('crumb').style.display = 'none';
+  }
+}
+function openView(title, builder) {
+  navStack.push({ title: title, builder: builder });
+  showCrumb(title);
+  builder();
+}
+function goRoot(builder) {
+  navStack = [];
+  showCrumb('');
+  builder();
+}
+function addRow(build) {
+  var li = document.createElement('li');
+  build(li);
+  $('list').appendChild(li);
+  return li;
+}
+function sectionRow(text) {
+  addRow(function (li) {
+    li.className = 'section';
+    li.appendChild(document.createTextNode(text));
+  });
+}
+function navRow(title, sub, coverId, onTap) {
+  addRow(function (li) {
+    if (coverId) {
+      var img = document.createElement('img');
+      img.src = coverUrl(coverId);
+      img.alt = '';
+      li.appendChild(img);
+    } else {
+      var go = document.createElement('span');
+      go.className = 'go';
+      go.appendChild(document.createTextNode('›'));
+      li.appendChild(go);
+    }
+    var t = document.createElement('div');
+    t.className = 't';
+    t.appendChild(document.createTextNode(title || ''));
+    li.appendChild(t);
+    if (sub) {
+      var s = document.createElement('div');
+      s.className = 's';
+      s.appendChild(document.createTextNode(sub));
+      li.appendChild(s);
+    }
+    li.onclick = onTap;
+  });
+}
+function songRow(song, songs) {
+  var li = addRow(function (el) {
+    var t = document.createElement('div');
+    t.className = 't';
+    t.appendChild(document.createTextNode(song.title || ''));
+    el.appendChild(t);
+    var sub = (song.artist || '') + (song.duration ? ' · ' + fmtTime(song.duration) : '');
+    var s = document.createElement('div');
+    s.className = 's';
+    s.appendChild(document.createTextNode(sub));
+    el.appendChild(s);
+    el.onclick = function () {
+      var idx = 0, i;
+      for (i = 0; i < songs.length; i++) if (songs[i].id === song.id) { idx = i; break; }
+      playFromList(songs, idx);
+    };
+  });
+  li.setAttribute('data-song-id', song.id);
+  markPlayingRow(li, song);
+  return li;
+}
+function songRows(songs) {
+  var i;
+  for (i = 0; i < songs.length; i++) songRow(songs[i], songs);
+  if (songs.length === 0) sectionRow('（空）');
+}
+
+/* ================= Views ================= */
+function vPlaylists() {
+  api('getPlaylists', {}, function (root) {
+    clearList();
+    var pls = asArray(root.playlists && root.playlists.playlist);
+    var i;
+    if (pls.length === 0) sectionRow('没有歌单');
+    for (i = 0; i < pls.length; i++) {
+      (function (pl) {
+        navRow(pl.name, (pl.songCount || 0) + ' 首', pl.coverArt, function () {
+          openView(pl.name, function () { vPlaylistSongs(pl.id); });
+        });
+      })(pls[i]);
+    }
+  }, function () { clearList(); });
+}
+function vPlaylistSongs(id) {
+  api('getPlaylist', { id: id }, function (root) {
+    clearList();
+    songRows(asArray(root.playlist && root.playlist.entry));
+  }, function () { clearList(); });
+}
+function albumRow(al) {
+  navRow(al.name || al.title, (al.artist || '') + (al.year ? ' · ' + al.year : ''), al.coverArt, function () {
+    openView(al.name || al.title, function () { vAlbum(al.id); });
+  });
+}
+function vAlbums() {
+  api('getAlbumList2', { type: 'newest', size: 60 }, function (root) {
+    clearList();
+    var albums = asArray(root.albumList2 && root.albumList2.album);
+    var i;
+    if (albums.length === 0) sectionRow('没有专辑');
+    for (i = 0; i < albums.length; i++) albumRow(albums[i]);
+  }, function () { clearList(); });
+}
+function vAlbum(id) {
+  api('getAlbum', { id: id }, function (root) {
+    clearList();
+    songRows(asArray(root.album && root.album.song));
+  }, function () { clearList(); });
+}
+function vArtists() {
+  api('getArtists', {}, function (root) {
+    clearList();
+    var indexes = asArray(root.artists && root.artists.index);
+    var any = false, i, j;
+    for (i = 0; i < indexes.length; i++) {
+      var artists = asArray(indexes[i].artist);
+      if (artists.length === 0) continue;
+      any = true;
+      sectionRow(indexes[i].name || '');
+      for (j = 0; j < artists.length; j++) {
+        (function (ar) {
+          navRow(ar.name, (ar.albumCount || 0) + ' 张专辑', ar.coverArt, function () {
+            openView(ar.name, function () { vArtist(ar.id); });
+          });
+        })(artists[j]);
+      }
+    }
+    if (!any) sectionRow('没有歌手');
+  }, function () { clearList(); });
+}
+function vArtist(id) {
+  api('getArtist', { id: id }, function (root) {
+    clearList();
+    var albums = asArray(root.artist && root.artist.album);
+    var i;
+    if (albums.length === 0) sectionRow('没有专辑');
+    for (i = 0; i < albums.length; i++) albumRow(albums[i]);
+  }, function () { clearList(); });
+}
+function vRandom() {
+  api('getRandomSongs', { size: 50 }, function (root) {
+    clearList();
+    songRows(asArray(root.randomSongs && root.randomSongs.song));
+  }, function () { clearList(); });
+}
+function doSearch() {
+  var q = $('searchInput').value;
+  if (!q) return;
+  $('searchInput').blur();
+  api('search3', { query: q, artistCount: 10, albumCount: 20, songCount: 50 }, function (root) {
+    clearList();
+    var r = root.searchResult3 || {};
+    var songs = asArray(r.song), albums = asArray(r.album), artists = asArray(r.artist);
+    var i;
+    if (songs.length === 0 && albums.length === 0 && artists.length === 0) { sectionRow('没有结果'); return; }
+    if (songs.length) { sectionRow('歌曲'); for (i = 0; i < songs.length; i++) songRow(songs[i], songs); }
+    if (albums.length) { sectionRow('专辑'); for (i = 0; i < albums.length; i++) albumRow(albums[i]); }
+    if (artists.length) {
+      sectionRow('歌手');
+      for (i = 0; i < artists.length; i++) {
+        (function (ar) {
+          navRow(ar.name, (ar.albumCount || 0) + ' 张专辑', ar.coverArt, function () {
+            openView(ar.name, function () { vArtist(ar.id); });
+          });
+        })(artists[i]);
+      }
+    }
+  }, function () { clearList(); });
+}
+
+/* ================= Player ================= */
+var queue = [], qIndex = -1, nowPlayingId = null;
+var audio = $('audio');
+function markPlayingRow(li, song) {
+  if (song.id === nowPlayingId) li.className = 'playing';
+}
+function refreshPlayingMarks() {
+  var lis = $('list').getElementsByTagName('li'), i;
+  for (i = 0; i < lis.length; i++) {
+    var sid = lis[i].getAttribute('data-song-id');
+    if (sid) lis[i].className = (sid === nowPlayingId) ? 'playing' : '';
+  }
+}
+function playFromList(songs, idx) {
+  queue = songs.slice(0);
+  playAt(idx);
+}
+function playAt(i) {
+  if (i < 0 || i >= queue.length) return;
+  qIndex = i;
+  var song = queue[i];
+  nowPlayingId = song.id;
+  audio.src = streamUrl(song.id);
+  audio.play();
+  $('npTitle').innerHTML = '';
+  $('npTitle').appendChild(document.createTextNode(song.title || ''));
+  $('npArtist').innerHTML = '';
+  $('npArtist').appendChild(document.createTextNode(song.artist || ''));
+  $('npCover').src = coverUrl(song.coverArt || song.id);
+  $('playBtn').innerHTML = '⏸';
+  refreshPlayingMarks();
+}
+function togglePlay() {
+  if (!audio.src) return;
+  if (audio.paused) { audio.play(); $('playBtn').innerHTML = '⏸'; }
+  else { audio.pause(); $('playBtn').innerHTML = '▶'; }
+}
+function next(auto) {
+  if (qIndex + 1 < queue.length) playAt(qIndex + 1);
+  else if (!auto) { /* stay */ }
+  else { $('playBtn').innerHTML = '▶'; }
+}
+function prev() {
+  if (audio.currentTime > 4) { audio.currentTime = 0; return; }
+  if (qIndex > 0) playAt(qIndex - 1);
+}
+audio.addEventListener('ended', function () { next(true); });
+audio.addEventListener('timeupdate', function () {
+  if (audio.duration && isFinite(audio.duration)) {
+    $('progFill').style.width = (audio.currentTime / audio.duration * 100) + '%';
+    $('tCur').innerHTML = fmtTime(audio.currentTime);
+    $('tTot').innerHTML = fmtTime(audio.duration);
+  }
+});
+audio.addEventListener('error', function () {
+  if (nowPlayingId) setStatus('这首歌播放失败，可能格式无法转码', true);
+});
+$('progWrap').onclick = function (e) {
+  if (!audio.duration || !isFinite(audio.duration)) return;
+  var rect = $('progWrap').getBoundingClientRect();
+  var x = (e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : rect.left)) - rect.left;
+  var frac = x / rect.width;
+  if (frac < 0) frac = 0; if (frac > 1) frac = 1;
+  audio.currentTime = frac * audio.duration;
+};
+$('playBtn').onclick = togglePlay;
+$('nextBtn').onclick = function () { next(false); };
+$('prevBtn').onclick = prev;
+
+/* ================= Tabs / nav / login ================= */
+var currentTab = 'playlists';
+function setTab(name) {
+  currentTab = name;
+  var tabs = { playlists: 'tabPlaylists', albums: 'tabAlbums', artists: 'tabArtists', random: 'tabRandom', search: 'tabSearch' };
+  var k;
+  for (k in tabs) $(tabs[k]).className = (k === name) ? 'on' : '';
+  $('searchBar').style.display = (name === 'search') ? 'block' : 'none';
+  if (name === 'playlists') goRoot(vPlaylists);
+  else if (name === 'albums') goRoot(vAlbums);
+  else if (name === 'artists') goRoot(vArtists);
+  else if (name === 'random') goRoot(vRandom);
+  else if (name === 'search') { navStack = []; showCrumb(''); clearList(); }
+}
+$('tabPlaylists').onclick = function () { setTab('playlists'); };
+$('tabAlbums').onclick = function () { setTab('albums'); };
+$('tabArtists').onclick = function () { setTab('artists'); };
+$('tabRandom').onclick = function () { setTab('random'); };
+$('tabSearch').onclick = function () { setTab('search'); };
+$('searchBtn').onclick = doSearch;
+$('searchInput').onkeydown = function (e) { if (e.keyCode === 13) doSearch(); };
+$('backBtn').onclick = function () {
+  navStack.pop();
+  showCrumb(navStack.length ? navStack[navStack.length - 1].title : '');
+  if (navStack.length) navStack[navStack.length - 1].builder();
+  else setTab(currentTab);
+};
+$('logoutBtn').onclick = function () {
+  try {
+    localStorage.removeItem('sm_u'); localStorage.removeItem('sm_t'); localStorage.removeItem('sm_s');
+  } catch (e) {}
+  auth = null;
+  audio.pause();
+  audio.removeAttribute('src');
+  $('appView').style.display = 'none';
+  $('loginView').style.display = 'block';
+};
+function enterApp() {
+  $('loginView').style.display = 'none';
+  $('appView').style.display = 'block';
+  setTab('playlists');
+}
+$('loginBtn').onclick = function () {
+  var u = $('user').value, p = $('pass').value;
+  var msg = $('loginMsg');
+  msg.innerHTML = '';
+  if (!u || !p) { msg.appendChild(document.createTextNode('请输入用户名和密码')); return; }
+  var salt = makeSalt();
+  auth = { u: u, t: md5hex(p + salt), s: salt };
+  msg.appendChild(document.createTextNode('登录中…'));
+  api('ping', {}, function () {
+    try {
+      localStorage.setItem('sm_u', auth.u);
+      localStorage.setItem('sm_t', auth.t);
+      localStorage.setItem('sm_s', auth.s);
+    } catch (e) {}
+    msg.innerHTML = '';
+    enterApp();
+  }, function () {
+    msg.innerHTML = '';
+    msg.appendChild(document.createTextNode('登录失败：用户名或密码不对，或服务器不可达'));
+    auth = null;
+  });
+};
+/* auto-login from saved token */
+(function () {
+  try {
+    var u = localStorage.getItem('sm_u'), t = localStorage.getItem('sm_t'), s = localStorage.getItem('sm_s');
+    if (u && t && s) {
+      auth = { u: u, t: t, s: s };
+      api('ping', {}, function () { enterApp(); }, function () { auth = null; });
+    }
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>
