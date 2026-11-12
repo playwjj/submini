@@ -12,7 +12,7 @@
   * { -webkit-tap-highlight-color: rgba(255,255,255,0.08); }
   html, body { margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         background: #0b0d12; color: #eef0f4; font-size: 16px; padding-bottom: 216px; }
+         background: #0b0d12; color: #eef0f4; font-size: 16px; padding-bottom: 214px; }
   button { font-family: inherit; cursor: pointer; }
   /* ---------- login ---------- */
   #loginView { max-width: 420px; margin: 60px auto 0 auto; padding: 0 24px; }
@@ -62,23 +62,26 @@
   /* ---------- player bar ---------- */
   #player { position: fixed; left: 0; right: 0; bottom: 0; background: #171a21; color: #eef0f4;
             z-index: 10; padding: 8px 10px 10px 10px; border-top: 1px solid rgba(255,255,255,0.12); }
-  /* cassette (simplified from subgram's full-player Walkman) */
-  #cassette { background: #21252f; border: 1px solid rgba(255,255,255,0.12);
-              border-radius: 10px; padding: 8px 10px 10px 10px; }
-  #labelRow { overflow: hidden; }
-  #sideBadge { float: left; border: 1.5px solid #eef0f4; border-radius: 4px;
-               font-weight: bold; font-size: 14px; padding: 1px 6px; margin: 2px 8px 0 0; }
-  #tapeType { float: right; color: rgba(238,240,244,0.55); font-size: 12px; margin-top: 4px; }
-  .stripe { height: 3px; border-radius: 2px; margin-top: 4px; }
+  /* cassette block on the left, song info on the right (user layout) */
+  #npRow { overflow: hidden; }
+  #cassette { float: left; width: 150px; background: #21252f;
+              border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 6px 8px; }
+  .stripe { height: 3px; border-radius: 2px; margin-bottom: 3px; }
   .stripe.s1 { background: #f2b33d; }
   .stripe.s2 { background: #ec7f2e; }
-  .stripe.s3 { background: #d9482b; margin-bottom: 7px; }
-  #tapeWindow { background: #0a0a0c; border-radius: 24px; text-align: center; padding: 4px 0; }
-  #npInfo { overflow: hidden; padding-top: 2px; }
-  #npTitle { font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden;
+  .stripe.s3 { background: #d9482b; margin-bottom: 5px; }
+  #tapeWindow { background: #0a0a0c; border-radius: 12px; text-align: center; padding: 4px 0; }
+  #cassetteFoot { overflow: hidden; margin-top: 5px; }
+  #sideBadge { float: left; border: 1.5px solid #eef0f4; border-radius: 4px;
+               font-weight: bold; font-size: 11px; padding: 0 4px; }
+  #tapeType { float: right; color: rgba(238,240,244,0.55); font-size: 11px; line-height: 16px; }
+  #npInfo { margin-left: 176px; padding-top: 30px; }
+  #npTitle { font-size: 18px; font-weight: bold; white-space: nowrap; overflow: hidden;
              text-overflow: ellipsis; }
-  #npArtist { font-size: 13px; color: rgba(238,240,244,0.6); white-space: nowrap; overflow: hidden;
-              text-overflow: ellipsis; margin-top: 2px; }
+  #npArtist { font-size: 14px; color: rgba(238,240,244,0.75); white-space: nowrap; overflow: hidden;
+              text-overflow: ellipsis; margin-top: 5px; }
+  #npAlbum { font-size: 12px; color: rgba(238,240,244,0.45); white-space: nowrap; overflow: hidden;
+             text-overflow: ellipsis; margin-top: 3px; }
   #ctlRow { overflow: hidden; margin-top: 6px; }
   #ctlRow .btns { float: left; }
   #ctlRow button { background: none; border: none; color: #eef0f4; font-size: 27px;
@@ -124,36 +127,36 @@
     <ul id="list"></ul>
   </div>
   <div id="player">
-    <div id="cassette">
-      <div id="labelRow">
-        <span id="sideBadge">A</span>
-        <div id="npInfo">
-          <div id="npTitle">未播放</div>
-          <div id="npArtist">点一首歌开始</div>
+    <div id="npRow">
+      <div id="cassette">
+        <div class="stripe s1"></div>
+        <div class="stripe s2"></div>
+        <div class="stripe s3"></div>
+        <div id="tapeWindow">
+          <svg id="reels" viewBox="0 0 150 76" width="150" height="76">
+            <rect x="42" y="36.5" width="66" height="3" fill="#3a2e26"></rect>
+            <circle id="packL" cx="42" cy="38" r="19" fill="#241d18" stroke="#000" stroke-width="1"></circle>
+            <circle id="packR" cx="108" cy="38" r="12.5" fill="#241d18" stroke="#000" stroke-width="1"></circle>
+            <g id="reelL">
+              <line x1="42" y1="38" x2="42" y2="28" stroke="#cfd3da" stroke-width="2.5"></line>
+              <line x1="42" y1="38" x2="51" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
+              <line x1="42" y1="38" x2="33" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
+              <circle cx="42" cy="38" r="4.5" fill="#cfd3da"></circle>
+            </g>
+            <g id="reelR">
+              <line x1="108" y1="38" x2="108" y2="28" stroke="#cfd3da" stroke-width="2.5"></line>
+              <line x1="108" y1="38" x2="117" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
+              <line x1="108" y1="38" x2="99" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
+              <circle cx="108" cy="38" r="4.5" fill="#cfd3da"></circle>
+            </g>
+          </svg>
         </div>
-        <span id="tapeType">C-60</span>
+        <div id="cassetteFoot"><span id="sideBadge">A</span><span id="tapeType">C-60</span></div>
       </div>
-      <div class="stripe s1"></div>
-      <div class="stripe s2"></div>
-      <div class="stripe s3"></div>
-      <div id="tapeWindow">
-        <svg id="reels" viewBox="0 0 200 54" width="100%" height="54" preserveAspectRatio="xMidYMid meet">
-          <rect x="55" y="25.5" width="90" height="3" fill="#3a2e26"></rect>
-          <circle id="packL" cx="55" cy="27" r="15" fill="#241d18" stroke="#000" stroke-width="1"></circle>
-          <circle id="packR" cx="145" cy="27" r="9" fill="#241d18" stroke="#000" stroke-width="1"></circle>
-          <g id="reelL">
-            <line x1="55" y1="27" x2="55" y2="17" stroke="#cfd3da" stroke-width="2.5"></line>
-            <line x1="55" y1="27" x2="63.7" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
-            <line x1="55" y1="27" x2="46.3" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
-            <circle cx="55" cy="27" r="4" fill="#cfd3da"></circle>
-          </g>
-          <g id="reelR">
-            <line x1="145" y1="27" x2="145" y2="17" stroke="#cfd3da" stroke-width="2.5"></line>
-            <line x1="145" y1="27" x2="153.7" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
-            <line x1="145" y1="27" x2="136.3" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
-            <circle cx="145" cy="27" r="4" fill="#cfd3da"></circle>
-          </g>
-        </svg>
+      <div id="npInfo">
+        <div id="npTitle">未播放</div>
+        <div id="npArtist">点一首歌开始</div>
+        <div id="npAlbum"></div>
       </div>
     </div>
     <div id="progWrap"><div id="progFill"></div></div>
@@ -212,6 +215,7 @@ function api(endpoint, params, ok, fail) {
   xhr.send(null);
 }
 function streamUrl(id) { return restUrl('stream', { id: id, format: 'mp3' }, false); }
+function coverUrl(id) { return restUrl('getCoverArt', { id: id, size: 96 }, false); }
 
 /* ================= UI helpers ================= */
 function fmtTime(sec) {
@@ -445,6 +449,8 @@ function playAt(i) {
   $('npTitle').appendChild(document.createTextNode(song.title || ''));
   $('npArtist').innerHTML = '';
   $('npArtist').appendChild(document.createTextNode(song.artist || ''));
+  $('npAlbum').innerHTML = '';
+  $('npAlbum').appendChild(document.createTextNode(song.album || ''));
   $('playBtn').innerHTML = '⏸';
   syncReels();
   refreshPlayingMarks();
@@ -490,8 +496,8 @@ var packLEl = document.getElementById('packL'), packREl = document.getElementByI
 var angleL = 0, angleR = 0, reelTimer = null, reelLast = 0;
 function setPack(frac) {
   if (!packLEl) return;
-  packLEl.setAttribute('r', 15 - 6 * frac);
-  packREl.setAttribute('r', 9 + 6 * frac);
+  packLEl.setAttribute('r', 19 - 6.5 * frac);
+  packREl.setAttribute('r', 12.5 + 6.5 * frac);
 }
 function spinStep(ts) {
   if (audio.paused || audio.ended) { reelTimer = null; return; }
@@ -499,11 +505,11 @@ function spinStep(ts) {
   reelLast = ts;
   if (dt > 0.1) dt = 0.1;
   var frac = (audio.duration && isFinite(audio.duration)) ? audio.currentTime / audio.duration : 0;
-  var rL = 15 - 6 * frac, rR = 9 + 6 * frac;
+  var rL = 19 - 6.5 * frac, rR = 12.5 + 6.5 * frac;
   angleL = (angleL + 900 / rL * dt) % 360;
   angleR = (angleR + 900 / rR * dt) % 360;
-  reelLEl.setAttribute('transform', 'rotate(' + angleL + ' 55 27)');
-  reelREl.setAttribute('transform', 'rotate(' + angleR + ' 145 27)');
+  reelLEl.setAttribute('transform', 'rotate(' + angleL + ' 42 38)');
+  reelREl.setAttribute('transform', 'rotate(' + angleR + ' 108 38)');
   reelTimer = requestAnimationFrame(spinStep);
 }
 function syncReels() {
