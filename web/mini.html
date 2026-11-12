@@ -693,6 +693,13 @@ function next(auto) {
 $('shuffleBtn').onclick = function () {
   shuffleOn = !shuffleOn;
   $('shuffleBtn').className = shuffleOn ? 'on' : '';
+  /* Turning shuffle on also jumps straight to a random other song, so the
+     tap has an immediate, audible effect — not just a mode for later. */
+  if (shuffleOn && nowPlayingId && queue.length > 1) {
+    var n = qIndex;
+    while (n === qIndex) n = Math.floor(Math.random() * queue.length);
+    playAt(n);
+  }
 };
 function prev() {
   if (audio.currentTime > 4) { audio.currentTime = 0; return; }
