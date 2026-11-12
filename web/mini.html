@@ -12,7 +12,7 @@
   * { -webkit-tap-highlight-color: rgba(255,255,255,0.08); }
   html, body { margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         background: #0b0d12; color: #eef0f4; font-size: 16px; padding-bottom: 214px; }
+         background: #0b0d12; color: #eef0f4; font-size: 16px; padding-bottom: 292px; }
   button { font-family: inherit; cursor: pointer; }
   /* ---------- login ---------- */
   #loginView { max-width: 420px; margin: 60px auto 0 auto; padding: 0 24px; }
@@ -62,20 +62,12 @@
   /* ---------- player bar ---------- */
   #player { position: fixed; left: 0; right: 0; bottom: 0; background: #171a21; color: #eef0f4;
             z-index: 10; padding: 8px 10px 10px 10px; border-top: 1px solid rgba(255,255,255,0.12); }
-  /* cassette block on the left, song info on the right (user layout) */
+  /* walkman on the left, song info on the right (user layout) */
   #npRow { overflow: hidden; }
-  #cassette { float: left; width: 150px; background: #21252f;
-              border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 6px 8px; }
-  .stripe { height: 3px; border-radius: 2px; margin-bottom: 3px; }
-  .stripe.s1 { background: #f2b33d; }
-  .stripe.s2 { background: #ec7f2e; }
-  .stripe.s3 { background: #d9482b; margin-bottom: 5px; }
-  #tapeWindow { background: #0a0a0c; border-radius: 12px; text-align: center; padding: 4px 0; }
-  #cassetteFoot { overflow: hidden; margin-top: 5px; }
-  #sideBadge { float: left; border: 1.5px solid #eef0f4; border-radius: 4px;
-               font-weight: bold; font-size: 11px; padding: 0 4px; }
-  #tapeType { float: right; color: rgba(238,240,244,0.55); font-size: 11px; line-height: 16px; }
-  #npInfo { margin-left: 176px; padding-top: 30px; }
+  #walkman { float: left; width: 228px; }
+  #walkman svg { display: block; }
+  .wkey { cursor: pointer; }
+  #npInfo { margin-left: 246px; padding-top: 36px; }
   #npTitle { font-size: 18px; font-weight: bold; white-space: nowrap; overflow: hidden;
              text-overflow: ellipsis; }
   #npArtist { font-size: 14px; color: rgba(238,240,244,0.75); white-space: nowrap; overflow: hidden;
@@ -128,30 +120,195 @@
   </div>
   <div id="player">
     <div id="npRow">
-      <div id="cassette">
-        <div class="stripe s1"></div>
-        <div class="stripe s2"></div>
-        <div class="stripe s3"></div>
-        <div id="tapeWindow">
-          <svg id="reels" viewBox="0 0 150 76" width="150" height="76">
-            <rect x="42" y="36.5" width="66" height="3" fill="#3a2e26"></rect>
-            <circle id="packL" cx="42" cy="38" r="19" fill="#241d18" stroke="#000" stroke-width="1"></circle>
-            <circle id="packR" cx="108" cy="38" r="12.5" fill="#241d18" stroke="#000" stroke-width="1"></circle>
-            <g id="reelL">
-              <line x1="42" y1="38" x2="42" y2="28" stroke="#cfd3da" stroke-width="2.5"></line>
-              <line x1="42" y1="38" x2="51" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
-              <line x1="42" y1="38" x2="33" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
-              <circle cx="42" cy="38" r="4.5" fill="#cfd3da"></circle>
+      <div id="walkman">
+        <svg viewBox="0 0 360 312" width="228" height="198">
+          <defs>
+            <linearGradient id="wmMetal" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#f4f5f7"></stop><stop offset="0.18" stop-color="#d5d8de"></stop>
+              <stop offset="0.55" stop-color="#afb4bd"></stop><stop offset="0.85" stop-color="#979ca5"></stop>
+              <stop offset="1" stop-color="#868b95"></stop>
+            </linearGradient>
+            <linearGradient id="wmSide" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#5d626b"></stop><stop offset="1" stop-color="#34373d"></stop>
+            </linearGradient>
+            <linearGradient id="wmBevel" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"></stop>
+              <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.15"></stop>
+              <stop offset="1" stop-color="#000000" stop-opacity="0.35"></stop>
+            </linearGradient>
+            <linearGradient id="wmGroove" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#000000" stop-opacity="0.45"></stop>
+              <stop offset="0.6" stop-color="#000000" stop-opacity="0.1"></stop>
+              <stop offset="1" stop-color="#ffffff" stop-opacity="0.85"></stop>
+            </linearGradient>
+            <linearGradient id="wmSheen" x1="0" y1="0" x2="1" y2="0.55">
+              <stop offset="0.2" stop-color="#ffffff" stop-opacity="0"></stop>
+              <stop offset="0.34" stop-color="#ffffff" stop-opacity="0.5"></stop>
+              <stop offset="0.42" stop-color="#ffffff" stop-opacity="0"></stop>
+              <stop offset="0.66" stop-color="#ffffff" stop-opacity="0"></stop>
+              <stop offset="0.72" stop-color="#ffffff" stop-opacity="0.18"></stop>
+              <stop offset="0.78" stop-color="#ffffff" stop-opacity="0"></stop>
+            </linearGradient>
+            <pattern id="wmBrush" width="6" height="2" patternUnits="userSpaceOnUse">
+              <rect width="6" height="0.8" fill="#ffffff" fill-opacity="0.12"></rect>
+            </pattern>
+            <linearGradient id="wmKey" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#ffffff"></stop><stop offset="0.45" stop-color="#e2e4e8"></stop>
+              <stop offset="1" stop-color="#b3b7bf"></stop>
+            </linearGradient>
+            <linearGradient id="wmRecess" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#000000" stop-opacity="0.7"></stop>
+              <stop offset="0.12" stop-color="#000000" stop-opacity="0"></stop>
+            </linearGradient>
+            <linearGradient id="wmGlass" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#ffffff" stop-opacity="0.2"></stop>
+              <stop offset="0.3" stop-color="#ffffff" stop-opacity="0.04"></stop>
+              <stop offset="0.31" stop-color="#ffffff" stop-opacity="0"></stop>
+              <stop offset="1" stop-color="#9fb4d8" stop-opacity="0.08"></stop>
+            </linearGradient>
+            <linearGradient id="wmShell" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#3a3d45"></stop><stop offset="1" stop-color="#1b1d22"></stop>
+            </linearGradient>
+            <linearGradient id="wmPaper" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#faf5e9"></stop><stop offset="1" stop-color="#e9dfc8"></stop>
+            </linearGradient>
+            <radialGradient id="wmPack">
+              <stop offset="0" stop-color="#22170f"></stop><stop offset="0.7" stop-color="#4a3426"></stop>
+              <stop offset="0.93" stop-color="#6d4f3b"></stop><stop offset="1" stop-color="#3a281d"></stop>
+            </radialGradient>
+            <radialGradient id="wmHub" cx="0.4" cy="0.35">
+              <stop offset="0" stop-color="#ffffff"></stop><stop offset="1" stop-color="#cfc9bc"></stop>
+            </radialGradient>
+            <radialGradient id="wmScrew" cx="0.35" cy="0.3">
+              <stop offset="0" stop-color="#9aa0aa"></stop><stop offset="1" stop-color="#3c4048"></stop>
+            </radialGradient>
+            <linearGradient id="wmWheel" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#3b3f46"></stop><stop offset="0.5" stop-color="#9196a0"></stop>
+              <stop offset="1" stop-color="#3b3f46"></stop>
+            </linearGradient>
+            <radialGradient id="wmLedOn" cx="0.4" cy="0.35">
+              <stop offset="0" stop-color="#e6fff0"></stop><stop offset="0.45" stop-color="#4dff88"></stop>
+              <stop offset="1" stop-color="#119140"></stop>
+            </radialGradient>
+            <radialGradient id="wmLedOff" cx="0.4" cy="0.35">
+              <stop offset="0" stop-color="#5d6b61"></stop><stop offset="1" stop-color="#1d2520"></stop>
+            </radialGradient>
+            <clipPath id="wmBodyClip"><rect x="4" y="26" width="352" height="270" rx="20"></rect></clipPath>
+            <clipPath id="wmLidClip"><rect x="22" y="46" width="316" height="206" rx="12"></rect></clipPath>
+            <clipPath id="wmWinClip"><rect x="74" y="66" width="172" height="52" rx="26"></rect></clipPath>
+          </defs>
+          <g class="wkey" id="keyPrev">
+            <rect x="34" y="10" width="52" height="30" rx="5" fill="#6b7079"></rect>
+            <rect x="34" y="6" width="52" height="30" rx="5" fill="url(#wmKey)"></rect>
+            <path d="M39 7 H81" stroke="#ffffff" stroke-opacity="0.9"></path>
+            <text x="60" y="25" font-size="12" text-anchor="middle" fill="#3a3d44">&#9664;&#9664;</text>
+          </g>
+          <g class="wkey" id="keyPlay">
+            <g id="keyPlayFace">
+              <rect x="92" y="10" width="52" height="30" rx="5" fill="#6b7079"></rect>
+              <rect x="92" y="6" width="52" height="30" rx="5" fill="url(#wmKey)"></rect>
+              <path d="M97 7 H139" stroke="#ffffff" stroke-opacity="0.9"></path>
+              <text x="118" y="25" font-size="12" text-anchor="middle" fill="#3a3d44">&#9654;</text>
             </g>
-            <g id="reelR">
-              <line x1="108" y1="38" x2="108" y2="28" stroke="#cfd3da" stroke-width="2.5"></line>
-              <line x1="108" y1="38" x2="117" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
-              <line x1="108" y1="38" x2="99" y2="43" stroke="#cfd3da" stroke-width="2.5"></line>
-              <circle cx="108" cy="38" r="4.5" fill="#cfd3da"></circle>
+          </g>
+          <g class="wkey" id="keyNext">
+            <rect x="150" y="10" width="52" height="30" rx="5" fill="#6b7079"></rect>
+            <rect x="150" y="6" width="52" height="30" rx="5" fill="url(#wmKey)"></rect>
+            <path d="M155 7 H197" stroke="#ffffff" stroke-opacity="0.9"></path>
+            <text x="176" y="25" font-size="12" text-anchor="middle" fill="#3a3d44">&#9654;&#9654;</text>
+          </g>
+          <g class="wkey" id="keyStop">
+            <rect x="208" y="10" width="52" height="30" rx="5" fill="#6b7079"></rect>
+            <rect x="208" y="6" width="52" height="30" rx="5" fill="url(#wmKey)"></rect>
+            <path d="M213 7 H255" stroke="#ffffff" stroke-opacity="0.9"></path>
+            <text x="234" y="25" font-size="12" text-anchor="middle" fill="#3a3d44">&#9632;</text>
+          </g>
+          <rect x="4" y="34" width="352" height="270" rx="20" fill="url(#wmSide)"></rect>
+          <rect x="4" y="26" width="352" height="270" rx="20" fill="url(#wmMetal)"></rect>
+          <g clip-path="url(#wmBodyClip)">
+            <rect x="4" y="26" width="352" height="270" fill="url(#wmBrush)"></rect>
+            <rect x="-60" y="26" width="480" height="270" fill="url(#wmSheen)"></rect>
+          </g>
+          <rect x="5" y="27" width="350" height="268" rx="19" fill="none" stroke="url(#wmBevel)" stroke-width="2"></rect>
+          <circle cx="318" cy="36" r="5.5" fill="#c9ccd2" stroke="#7d828b" stroke-width="0.8"></circle>
+          <circle cx="318" cy="36" r="3.2" fill="#14161a"></circle>
+          <rect x="352" y="96" width="8" height="64" rx="3" fill="url(#wmWheel)"></rect>
+          <path d="M352 102h8M352 108h8M352 114h8M352 120h8M352 126h8M352 132h8M352 138h8M352 144h8M352 150h8M352 156h8" stroke="#2c2f35" stroke-opacity="0.7"></path>
+          <rect x="17" y="41" width="326" height="216" rx="16" fill="none" stroke="url(#wmGroove)" stroke-width="3"></rect>
+          <rect x="22" y="46" width="316" height="206" rx="12" fill="#0c0d11"></rect>
+          <g clip-path="url(#wmLidClip)">
+            <g transform="translate(42.5 63) scale(0.86)">
+              <rect width="320" height="200" rx="12" fill="url(#wmShell)"></rect>
+              <path d="M12 1.5 H308" stroke="#ffffff" stroke-opacity="0.35"></path>
+              <rect x="20" y="12" width="280" height="124" rx="6" fill="url(#wmPaper)"></rect>
+              <rect x="20" y="82" width="280" height="5" fill="#d9482b"></rect>
+              <rect x="20" y="87" width="280" height="5" fill="#ec7f2e"></rect>
+              <rect x="20" y="92" width="280" height="5" fill="#f2b33d"></rect>
+              <rect x="20" y="97" width="280" height="5" fill="#f5d469"></rect>
+              <text x="30" y="32" font-size="14" font-weight="bold" fill="#c0392b">A</text>
+              <text id="tapeTitle" x="48" y="32" font-size="12" font-weight="bold" fill="#26282d">Submini</text>
+              <path d="M30 40 H290" stroke="#cdbf9f"></path>
+              <text id="tapeArtist" x="30" y="56" font-size="10" fill="#6b6455"></text>
+              <text x="290" y="56" font-size="10" font-weight="bold" text-anchor="end" fill="#c0392b">C-60</text>
+              <circle cx="10" cy="10" r="4" fill="url(#wmScrew)"></circle>
+              <path d="M7.4 11.5 L12.6 8.5" stroke="#202227" stroke-width="1"></path>
+              <circle cx="310" cy="10" r="4" fill="url(#wmScrew)"></circle>
+              <path d="M307.4 11.5 L312.6 8.5" stroke="#202227" stroke-width="1"></path>
+              <circle cx="10" cy="190" r="4" fill="url(#wmScrew)"></circle>
+              <path d="M7.4 191.5 L12.6 188.5" stroke="#202227" stroke-width="1"></path>
+              <circle cx="310" cy="190" r="4" fill="url(#wmScrew)"></circle>
+              <path d="M307.4 191.5 L312.6 188.5" stroke="#202227" stroke-width="1"></path>
+              <rect x="74" y="66" width="172" height="52" rx="26" fill="#08080a"></rect>
+              <g clip-path="url(#wmWinClip)">
+                <circle id="packL" cx="112" cy="92" r="44" fill="url(#wmPack)"></circle>
+                <circle id="packR" cx="208" cy="92" r="15" fill="url(#wmPack)"></circle>
+              </g>
+              <g transform="translate(112 92)">
+                <g id="reelL">
+                  <circle r="12" fill="url(#wmHub)"></circle>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(60)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(120)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(180)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(240)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(300)"></rect>
+                  <circle r="3.5" fill="#25282f"></circle>
+                </g>
+              </g>
+              <g transform="translate(208 92)">
+                <g id="reelR">
+                  <circle r="12" fill="url(#wmHub)"></circle>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(60)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(120)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(180)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(240)"></rect>
+                  <rect x="-1.6" y="-11" width="3.2" height="5" fill="#3a3d44" transform="rotate(300)"></rect>
+                  <circle r="3.5" fill="#25282f"></circle>
+                </g>
+              </g>
+              <rect x="74" y="66" width="172" height="52" rx="26" fill="none" stroke="#ffffff" stroke-opacity="0.3" stroke-width="2"></rect>
+              <path d="M92 70 H228" stroke="#ffffff" stroke-opacity="0.18" stroke-width="3" stroke-linecap="round"></path>
+              <path d="M64 200 L80 158 L240 158 L256 200 Z" fill="#2c2f36"></path>
+              <path d="M80 158.5 L240 158.5" stroke="#ffffff" stroke-opacity="0.15"></path>
+              <circle cx="104" cy="181" r="6" fill="#08080a"></circle>
+              <circle cx="216" cy="181" r="6" fill="#08080a"></circle>
+              <rect x="148" y="172" width="24" height="12" rx="2" fill="#08080a"></rect>
+              <path d="M84 197 H236" stroke="#4b3427" stroke-width="2.5"></path>
             </g>
-          </svg>
-        </div>
-        <div id="cassetteFoot"><span id="sideBadge">A</span><span id="tapeType">C-60</span></div>
+            <rect x="22" y="46" width="316" height="206" fill="url(#wmRecess)"></rect>
+            <rect x="22" y="46" width="316" height="206" fill="url(#wmGlass)"></rect>
+            <path d="M40 46 L118 46 L52 252 L22 252 L22 90 Z" fill="#ffffff" fill-opacity="0.06"></path>
+          </g>
+          <rect x="22.5" y="46.5" width="315" height="205" rx="11.5" fill="none" stroke="#000000" stroke-opacity="0.6"></rect>
+          <path d="M34 48 H326" stroke="#ffffff" stroke-opacity="0.22"></path>
+          <text x="26" y="281" font-size="10" font-weight="bold" letter-spacing="3" fill="#ffffff" fill-opacity="0.4">STEREO CASSETTE PLAYER</text>
+          <text x="26" y="280" font-size="10" font-weight="bold" letter-spacing="3" fill="#3c4048">STEREO CASSETTE PLAYER</text>
+          <text x="296" y="280" font-size="8" font-weight="bold" letter-spacing="1" fill="#3c4048">PLAY</text>
+          <circle cx="330" cy="276" r="6.5" fill="#6b7079"></circle>
+          <circle id="playLed" cx="330" cy="276" r="4.5" fill="url(#wmLedOff)"></circle>
+          <circle cx="328.6" cy="274.4" r="1.2" fill="#ffffff" fill-opacity="0.8"></circle>
+        </svg>
       </div>
       <div id="npInfo">
         <div id="npTitle">未播放</div>
@@ -438,6 +595,7 @@ function playFromList(songs, idx) {
   queue = songs.slice(0);
   playAt(idx);
 }
+function clipText(s, n) { return s.length > n ? s.substring(0, n - 1) + '…' : s; }
 function playAt(i) {
   if (i < 0 || i >= queue.length) return;
   qIndex = i;
@@ -445,6 +603,8 @@ function playAt(i) {
   nowPlayingId = song.id;
   audio.src = streamUrl(song.id);
   audio.play();
+  $('tapeTitle').textContent = clipText(song.title || '', 30);
+  $('tapeArtist').textContent = clipText(song.artist || '', 34);
   $('npTitle').innerHTML = '';
   $('npTitle').appendChild(document.createTextNode(song.title || ''));
   $('npArtist').innerHTML = '';
@@ -496,8 +656,8 @@ var packLEl = document.getElementById('packL'), packREl = document.getElementByI
 var angleL = 0, angleR = 0, reelTimer = null, reelLast = 0;
 function setPack(frac) {
   if (!packLEl) return;
-  packLEl.setAttribute('r', 19 - 6.5 * frac);
-  packREl.setAttribute('r', 12.5 + 6.5 * frac);
+  packLEl.setAttribute('r', 15 + 29 * (1 - frac));
+  packREl.setAttribute('r', 15 + 29 * frac);
 }
 function spinStep(ts) {
   if (audio.paused || audio.ended) { reelTimer = null; return; }
@@ -505,11 +665,11 @@ function spinStep(ts) {
   reelLast = ts;
   if (dt > 0.1) dt = 0.1;
   var frac = (audio.duration && isFinite(audio.duration)) ? audio.currentTime / audio.duration : 0;
-  var rL = 19 - 6.5 * frac, rR = 12.5 + 6.5 * frac;
-  angleL = (angleL + 900 / rL * dt) % 360;
-  angleR = (angleR + 900 / rR * dt) % 360;
-  reelLEl.setAttribute('transform', 'rotate(' + angleL + ' 42 38)');
-  reelREl.setAttribute('transform', 'rotate(' + angleR + ' 108 38)');
+  var rL = 15 + 29 * (1 - frac), rR = 15 + 29 * frac;
+  angleL = (angleL + 4400 / rL * dt) % 360;
+  angleR = (angleR + 4400 / rR * dt) % 360;
+  reelLEl.setAttribute('transform', 'rotate(' + angleL + ')');
+  reelREl.setAttribute('transform', 'rotate(' + angleR + ')');
   reelTimer = requestAnimationFrame(spinStep);
 }
 function syncReels() {
@@ -533,6 +693,28 @@ $('progWrap').onclick = function (e) {
 $('playBtn').onclick = togglePlay;
 $('nextBtn').onclick = function () { next(false); };
 $('prevBtn').onclick = prev;
+/* Walkman transport keys on the machine itself + PLAY lamp / pressed key */
+function setDeckState(playing) {
+  var led = $('playLed');
+  if (led) led.setAttribute('fill', playing ? 'url(#wmLedOn)' : 'url(#wmLedOff)');
+  var face = $('keyPlayFace');
+  if (face) {
+    if (playing) face.setAttribute('transform', 'translate(0 2.5)');
+    else face.removeAttribute('transform');
+  }
+}
+audio.addEventListener('play', function () { setDeckState(true); });
+audio.addEventListener('pause', function () { setDeckState(false); });
+$('keyPrev').addEventListener('click', prev);
+$('keyPlay').addEventListener('click', togglePlay);
+$('keyNext').addEventListener('click', function () { next(false); });
+$('keyStop').addEventListener('click', function () {
+  audio.pause();
+  if (audio.duration && isFinite(audio.duration)) audio.currentTime = 0;
+  $('progFill').style.width = '0%';
+  $('tCur').innerHTML = '0:00';
+  setPack(0);
+});
 
 /* ================= Tabs / nav / login ================= */
 var currentTab = 'playlists';
