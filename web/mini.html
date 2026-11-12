@@ -96,7 +96,17 @@
   #ctlRow .btns button:active { background: rgba(255,255,255,0.16); }
   #ctlRow #playBtn { width: 58px; height: 58px; background: #7dd3c0; color: #0b0d12; font-size: 23px; }
   #ctlRow #playBtn:active { background: #a7e8d8; }
-  #ctlRow #prevBtn, #ctlRow #nextBtn { font-size: 15px; letter-spacing: -2px; }
+  /* vector icons in the transport buttons: iOS renders the old text glyphs
+     as colour emoji, which clashed with the design; SVG looks identical
+     on every device and takes the button's colour via fill/stroke */
+  #ctlRow .btns button { line-height: 46px; }
+  #ctlRow .btns button svg { display: inline-block; vertical-align: middle; }
+  #ctlRow .btns button .icF { width: 22px; height: 22px; fill: #eef0f4; }
+  #ctlRow .btns button .icS { width: 20px; height: 20px; fill: none; stroke: #eef0f4; stroke-width: 2;
+                              stroke-linecap: round; stroke-linejoin: round; }
+  #ctlRow #playBtn { line-height: 58px; }
+  #ctlRow #playBtn .icF { width: 26px; height: 26px; fill: #0b0d12; }
+  #ctlRow #shuffleBtn.on .icS { stroke: #7dd3c0; }
   #ctlRow #shuffleBtn.on { background: rgba(125,211,192,0.30); }
   #ctlRow #shuffleBtn.on:after { content: ''; position: absolute; left: 50%; bottom: -8px;
                                  width: 5px; height: 5px; margin-left: -3px; border-radius: 50%;
@@ -121,9 +131,11 @@
   #player.full #progWrap { height: 10px; margin-top: 16px; }
   #player.full #progFill { height: 10px; }
   #player.full #ctlRow .btns { float: none; text-align: center; }
-  #player.full #ctlRow .btns button { width: 56px; height: 56px; font-size: 23px; margin-right: 14px; }
-  #player.full #ctlRow #playBtn { width: 74px; height: 74px; font-size: 30px; }
-  #player.full #ctlRow #prevBtn, #player.full #ctlRow #nextBtn { font-size: 18px; }
+  #player.full #ctlRow .btns button { width: 56px; height: 56px; font-size: 23px; margin-right: 14px; line-height: 56px; }
+  #player.full #ctlRow #playBtn { width: 74px; height: 74px; font-size: 30px; line-height: 74px; }
+  #player.full #ctlRow .btns button .icF { width: 26px; height: 26px; }
+  #player.full #ctlRow #playBtn .icF { width: 32px; height: 32px; }
+  #player.full #ctlRow .btns button .icS { width: 24px; height: 24px; }
   #player.full #timeBox { float: none; text-align: center; line-height: 26px; }
   #queueBox { display: none; margin-top: 16px; }
   #player.full #queueBox { display: block; }
@@ -371,10 +383,10 @@
     <div id="progWrap"><div id="progFill"></div></div>
     <div id="ctlRow">
       <div class="btns">
-        <button id="shuffleBtn">🔀</button>
-        <button id="prevBtn">◀◀</button>
-        <button id="playBtn">▶</button>
-        <button id="nextBtn">▶▶</button>
+        <button id="shuffleBtn"><svg class="icS" viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg></button>
+        <button id="prevBtn"><svg class="icF" viewBox="0 0 24 24"><path d="M6 5 h2.6 v14 H6 Z M19 5 L10 12 L19 19 Z"></path></svg></button>
+        <button id="playBtn"><svg id="icoPlay" class="icF" viewBox="0 0 24 24"><path d="M8 5 L19 12 L8 19 Z"></path></svg><svg id="icoPause" class="icF" viewBox="0 0 24 24" style="display:none"><path d="M7 5 h3.6 v14 H7 Z M13.4 5 H17 v14 h-3.6 Z"></path></svg></button>
+        <button id="nextBtn"><svg class="icF" viewBox="0 0 24 24"><path d="M5 5 L14 12 L5 19 Z M15.4 5 H18 v14 h-2.6 Z"></path></svg></button>
       </div>
       <button id="expandBtn" class="miniBtn">全屏</button>
       <div id="timeBox"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
@@ -669,15 +681,24 @@ function playAt(i) {
   $('npArtist').appendChild(document.createTextNode(song.artist || ''));
   $('npAlbum').innerHTML = '';
   $('npAlbum').appendChild(document.createTextNode(song.album || ''));
-  $('playBtn').innerHTML = '❚❚';
+  setPlayIcon(true);
   syncReels();
   refreshPlayingMarks();
   renderQueue();
 }
+function setPlayIcon(playing) {
+  $('icoPlay').style.display = playing ? 'none' : 'inline-block';
+  $('icoPause').style.display = playing ? 'inline-block' : 'none';
+}
 function togglePlay() {
-  if (!audio.src) return;
-  if (audio.paused) { audio.play(); $('playBtn').innerHTML = '❚❚'; }
-  else { audio.pause(); $('playBtn').innerHTML = '▶'; }
+  if (!audio.src) {
+    /* nothing loaded yet: if the queue was prefilled (random songs on
+       first open), start from the top */
+    if (queue.length) playAt(0);
+    return;
+  }
+  if (audio.paused) { audio.play(); setPlayIcon(true); }
+  else { audio.pause(); setPlayIcon(false); }
 }
 var shuffleOn = false;
 function next(auto) {
@@ -688,7 +709,7 @@ function next(auto) {
     return;
   }
   if (qIndex + 1 < queue.length) playAt(qIndex + 1);
-  else if (auto) { $('playBtn').innerHTML = '▶'; }
+  else if (auto) { setPlayIcon(false); }
 }
 $('shuffleBtn').onclick = function () {
   shuffleOn = !shuffleOn;
@@ -761,6 +782,7 @@ $('nextBtn').onclick = function () { next(false); };
 $('prevBtn').onclick = prev;
 /* Walkman transport keys on the machine itself + PLAY lamp / pressed key */
 function setDeckState(playing) {
+  setPlayIcon(playing);
   var led = $('playLed');
   if (led) led.setAttribute('fill', playing ? 'url(#wmLedOn)' : 'url(#wmLedOff)');
   var face = $('keyPlayFace');
@@ -848,11 +870,34 @@ $('logoutBtn').onclick = function () {
   $('appView').style.display = 'none';
   $('loginView').style.display = 'block';
 };
+/* First open lands on the fullscreen player; prefill its queue with
+   random songs so there is something to play without collapsing to the
+   lists first. Nothing autoplays (iOS needs a tap anyway) — the first
+   song is previewed on the label and Play starts the queue. */
+function loadRandomQueue() {
+  if (queue.length) return;
+  api('getRandomSongs', { size: 50 }, function (root) {
+    var songs = asArray(root.randomSongs && root.randomSongs.song);
+    if (!songs.length || queue.length) return;
+    queue = songs.slice(0);
+    renderQueue();
+    var s = queue[0];
+    $('npTitle').innerHTML = '';
+    $('npTitle').appendChild(document.createTextNode(s.title || ''));
+    $('npArtist').innerHTML = '';
+    $('npArtist').appendChild(document.createTextNode(s.artist || ''));
+    $('npAlbum').innerHTML = '';
+    $('npAlbum').appendChild(document.createTextNode(s.album || ''));
+    $('tapeTitle').textContent = clipText(s.title || '', 30);
+    $('tapeArtist').textContent = clipText(s.artist || '', 34);
+  }, function () {});
+}
 function enterApp() {
   $('loginView').style.display = 'none';
   $('appView').style.display = 'block';
   setTab('playlists');
   setFull(true);
+  loadRandomQueue();
 }
 $('loginBtn').onclick = function () {
   var server = $('server').value, u = $('user').value, p = $('pass').value;
