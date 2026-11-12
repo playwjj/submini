@@ -14,6 +14,8 @@ docker compose pull
 docker compose up -d
 ```
 
+compose 用的是 host 网络模式：Docker 默认网桥只有 IPv4，上游如果是纯 IPv6 地址（如公网 AAAA-only 域名）容器里会连不上；host 模式下容器直接用宿主机的网络栈，IPv6 照常，9898 端口也直接落在宿主机上。
+
 然后打开 `http://<家里服务器>:9898`，**第一次打开会看到连接设置表单**：填服务器地址（如 `http://192.168.1.10:4533`）、Subsonic 用户名和密码，点「连接并保存」。后端会先向服务器验证一次，成功才保存；之后任何设备打开这个页面都直接进播放器，不用再输。
 
 本地构建也可以：`docker build -t submini .`，或直接 `go run .`（见下文）。

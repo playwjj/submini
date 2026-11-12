@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -178,6 +179,20 @@ type connectRequest struct {
 	Password string `json:"password"`
 }
 
+// Shared outbound transport. The dialer is explicit so IPv6-only
+// upstreams (e.g. a public AAAA-only hostname) work wherever the host
+// or container network actually carries IPv6.
+func outboundTransport() *http.Transport {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	return &http.Transport{
+		Proxy:               http.ProxyFromEnvironment,
+		DialContext:         dialer.DialContext,
+		MaxIdleConns:        16,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+}
+
 func pingSubsonic(cfg *connConfig) error {
 	u := *cfg.base
 	u.Path = joinPaths(u.Path, "/rest/ping.view")
@@ -189,7 +204,7 @@ func pingSubsonic(cfg *connConfig) error {
 	q.Set("c", "submini")
 	q.Set("f", "json")
 	u.RawQuery = q.Encode()
-	client := &http.Client{Timeout: 12 * time.Second}
+	client := &http.Client{Timeout: 12 * time.Second, Transport: outboundTransport()}
 	resp, err := client.Get(u.String())
 	if err != nil {
 		return fmt.Errorf("连不上服务器：%v", err)
@@ -306,12 +321,7 @@ func main() {
 	proxy := &httputil.ReverseProxy{
 		// Stream audio without buffering pauses: flush as data arrives.
 		FlushInterval: -1,
-		Transport: &http.Transport{
-			Proxy:               http.ProxyFromEnvironment,
-			MaxIdleConns:        16,
-			IdleConnTimeout:     90 * time.Second,
-			TLSHandshakeTimeout: 10 * time.Second,
-		},
+		Transport:     outboundTransport(),
 		Director: func(r *http.Request) {
 			c := current()
 			target := c.base
