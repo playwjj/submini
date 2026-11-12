@@ -7,8 +7,8 @@ services:
       - "9898:9898"
     volumes:
       # Connection settings (server + account token) live in a SQLite DB
-      # in /data; keep it on a named volume so they survive upgrades.
-      - submini-data:/data
-
-volumes:
-  submini-data:
+      # in /data. Bind-mounted to ./data next to this file so the data is
+      # easy to see and back up. Create it first, owned by the user the
+      # container runs as (65534), or SQLite cannot open its DB:
+      #   mkdir -p data && sudo chown 65534:65534 data
+      - ./data:/data

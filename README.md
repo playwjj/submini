@@ -9,6 +9,7 @@
 镜像由 GitHub Actions 在打 `v*` 标签时构建，推送到 Docker Hub（`passport888/submini`）与 GHCR。家里部署只需拉镜像：
 
 ```bash
+mkdir -p data && sudo chown 65534:65534 data   # 容器以 nobody(65534) 运行，数据目录要归它
 docker compose pull
 docker compose up -d
 ```
@@ -19,7 +20,7 @@ docker compose up -d
 
 ## 配置与数据
 
-连接信息存在后端的 SQLite 数据库里（`submini.db`），compose 用命名卷 `submini-data` 挂在 `/data`，升级镜像不丢。**存的是 Subsonic 的 token 和 salt，不是密码原文**——密码只在提交表单时用一次，算完 token 就丢弃。点页面右上角「退出」会清掉已保存的连接，回到设置表单。
+连接信息存在后端的 SQLite 数据库里（`submini.db`），compose 把它挂在工作目录的 `./data` 下（容器内 `/data`），升级镜像不丢，备份也方便。**存的是 Subsonic 的 token 和 salt，不是密码原文**——密码只在提交表单时用一次，算完 token 就丢弃。点页面右上角「退出」会清掉已保存的连接，回到设置表单。
 
 环境变量只剩两个基础设施项：
 
