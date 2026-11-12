@@ -21,7 +21,7 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"database/sql"
-	_ "embed"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -42,6 +42,23 @@ import (
 
 //go:embed web/mini.html
 var playerPage []byte
+
+// Home-screen icons and iPad splash screens (artwork borrowed from
+// subgram). Served under /icons/ plus the root paths iOS probes for.
+
+//go:embed web/icons
+var iconsFS embed.FS
+
+func serveIcon(w http.ResponseWriter, r *http.Request, name string) {
+	data, err := iconsFS.ReadFile("web/icons/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	_, _ = w.Write(data)
+}
 
 type connConfig struct {
 	Server   string `json:"server"`
@@ -362,6 +379,23 @@ func main() {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/icons/", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/icons/")
+		if name == "" || strings.ContainsAny(name, "/\\") || strings.Contains(name, "..") {
+			http.NotFound(w, r)
+			return
+		}
+		serveIcon(w, r, name)
+	})
+	mux.HandleFunc("/apple-touch-icon.png", func(w http.ResponseWriter, r *http.Request) {
+		serveIcon(w, r, "apple-touch-icon-180.png")
+	})
+	mux.HandleFunc("/apple-touch-icon-precomposed.png", func(w http.ResponseWriter, r *http.Request) {
+		serveIcon(w, r, "apple-touch-icon-180.png")
+	})
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		serveIcon(w, r, "favicon-32.png")
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" && r.URL.Path != "/mini.html" && r.URL.Path != "/index.html" {
