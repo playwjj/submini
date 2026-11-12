@@ -1,0 +1,23 @@
+name: Docker Hub description
+
+# Keeps the Docker Hub overview in sync with the repo README.
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - .github/workflows/hub-description.yml
+  workflow_dispatch:
+
+jobs:
+  description:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ vars.DOCKERHUB_USERNAME }}/submini
+          short-description: 为初代 iPad mini（iOS 9）准备的极简 Subsonic 播放器
+          readme-filepath: ./README.md
