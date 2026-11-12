@@ -1,10 +1,10 @@
 // submini — a tiny same-origin host for the iPad mini (iOS 9) Subsonic player.
 //
 // It does exactly two things:
-//   1. Serve the single-file ES5 player page (web/mini.html, embedded).
-//   2. Reverse-proxy /rest/* to a Subsonic API server (Navidrome by default),
-//      so the old Safari sees page + API as one origin (no CORS) and stream
-//      Range requests/responses pass straight through.
+//  1. Serve the single-file ES5 player page (web/mini.html, embedded).
+//  2. Reverse-proxy /rest/* to a Subsonic API server (Navidrome by default),
+//     so the old Safari sees page + API as one origin (no CORS) and stream
+//     Range requests/responses pass straight through.
 //
 // Configuration is environment-only:
 //

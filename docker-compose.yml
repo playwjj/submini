@@ -1,6 +1,5 @@
 services:
   submini:
-    build: .
     image: passport888/submini:latest
     container_name: submini
     restart: unless-stopped

@@ -6,10 +6,15 @@
 
 ## 运行
 
+镜像由 GitHub Actions 在打 `v*` 标签时构建，推送到 Docker Hub（`passport888/submini`）与 GHCR。家里部署只需拉镜像：
+
 ```bash
+docker compose pull
 docker compose up -d
 # 打开 http://<家里服务器>:9898 ，用 Navidrome 的账号密码登录
 ```
+
+本地构建也可以：`docker build -t submini .`，或直接 `go run .`（见下文）。
 
 环境变量：
 
