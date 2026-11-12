@@ -79,7 +79,7 @@
   /* walkman on the left, song info on the right (user layout) */
   #npRow { overflow: hidden; }
   #walkman { float: left; width: 228px; }
-  #walkman svg { display: block; }
+  #walkman svg { display: block; width: 100%; height: auto; }
   .wkey { cursor: pointer; }
   #npInfo { margin-left: 246px; padding-top: 36px; }
   #npTitle { font-size: 18px; font-weight: bold; white-space: nowrap; overflow: hidden;
@@ -90,13 +90,50 @@
              text-overflow: ellipsis; margin-top: 3px; }
   #ctlRow { overflow: hidden; margin-top: 6px; }
   #ctlRow .btns { float: left; }
-  #ctlRow button { background: none; border: none; color: #eef0f4; font-size: 27px;
-                   padding: 4px 14px; }
-  #ctlRow button:active { color: #7dd3c0; }
-  #ctlRow button.on { color: #7dd3c0; }
-  #timeBox { float: right; color: rgba(238,240,244,0.6); font-size: 13px; line-height: 42px; }
+  #ctlRow .btns button { width: 46px; height: 46px; border: none; border-radius: 50%;
+                         background: rgba(255,255,255,0.07); color: #eef0f4; font-size: 19px;
+                         padding: 0; margin-right: 10px; vertical-align: middle; position: relative; }
+  #ctlRow .btns button:active { background: rgba(255,255,255,0.16); }
+  #ctlRow #playBtn { width: 58px; height: 58px; background: #7dd3c0; color: #0b0d12; font-size: 23px; }
+  #ctlRow #playBtn:active { background: #a7e8d8; }
+  #ctlRow #prevBtn, #ctlRow #nextBtn { font-size: 15px; letter-spacing: -2px; }
+  #ctlRow #shuffleBtn.on { background: rgba(125,211,192,0.30); }
+  #ctlRow #shuffleBtn.on:after { content: ''; position: absolute; left: 50%; bottom: -8px;
+                                 width: 5px; height: 5px; margin-left: -3px; border-radius: 50%;
+                                 background: #7dd3c0; }
+  #timeBox { float: right; color: rgba(238,240,244,0.6); font-size: 13px; line-height: 58px; }
   #progWrap { margin-top: 8px; background: rgba(255,255,255,0.15); height: 8px; border-radius: 4px; }
   #progFill { background: #7dd3c0; height: 8px; border-radius: 4px; width: 0%; }
+  /* ---------- fullscreen player (default view; bar is the shrunk form) ---------- */
+  #player .miniBtn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.22);
+                     color: #eef0f4; font-size: 14px; border-radius: 8px; padding: 5px 12px; }
+  #expandBtn { float: right; margin: 8px 0 0 10px; }
+  #collapseBtn { display: none; position: absolute; top: 12px; right: 12px; z-index: 2; }
+  #player.full { top: 0; z-index: 20; overflow-y: auto; padding: 20px 16px 16px 16px; }
+  #player.full #collapseBtn { display: block; }
+  #player.full #expandBtn { display: none; }
+  #player.full #walkman { float: none; width: 340px; margin: 16px auto 0 auto; }
+  @media (orientation: landscape) { #player.full #walkman { width: 248px; } }
+  #player.full #npInfo { margin-left: 0; padding-top: 14px; text-align: center; }
+  #player.full #npTitle { font-size: 24px; }
+  #player.full #npArtist { font-size: 17px; }
+  #player.full #npAlbum { font-size: 14px; }
+  #player.full #progWrap { height: 10px; margin-top: 16px; }
+  #player.full #progFill { height: 10px; }
+  #player.full #ctlRow .btns { float: none; text-align: center; }
+  #player.full #ctlRow .btns button { width: 56px; height: 56px; font-size: 23px; margin-right: 14px; }
+  #player.full #ctlRow #playBtn { width: 74px; height: 74px; font-size: 30px; }
+  #player.full #ctlRow #prevBtn, #player.full #ctlRow #nextBtn { font-size: 18px; }
+  #player.full #timeBox { float: none; text-align: center; line-height: 26px; }
+  #queueBox { display: none; margin-top: 16px; }
+  #player.full #queueBox { display: block; }
+  #queueBox .qhead { font-size: 14px; color: rgba(238,240,244,0.55); margin-bottom: 6px; }
+  #queueEmpty { color: rgba(238,240,244,0.5); font-size: 14px; padding: 10px 2px; }
+  ul#queueList { list-style: none; margin: 0; padding: 0; }
+  ul#queueList li { overflow: hidden; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.07);
+                    font-size: 16px; }
+  ul#queueList li .sub { display: block; font-size: 12px; color: rgba(238,240,244,0.5); margin-top: 2px; }
+  ul#queueList li.playing { color: #7dd3c0; }
 </style>
 </head>
 <body>
@@ -133,6 +170,7 @@
     <ul id="list"></ul>
   </div>
   <div id="player">
+    <button id="collapseBtn" class="miniBtn">收起</button>
     <div id="npRow">
       <div id="walkman">
         <svg viewBox="0 0 360 312" width="228" height="198">
@@ -334,11 +372,17 @@
     <div id="ctlRow">
       <div class="btns">
         <button id="shuffleBtn">🔀</button>
-        <button id="prevBtn">⏮</button>
+        <button id="prevBtn">◀◀</button>
         <button id="playBtn">▶</button>
-        <button id="nextBtn">⏭</button>
+        <button id="nextBtn">▶▶</button>
       </div>
+      <button id="expandBtn" class="miniBtn">全屏</button>
       <div id="timeBox"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
+    </div>
+    <div id="queueBox">
+      <div class="qhead">播放队列 — 点任意一首直接切歌</div>
+      <div id="queueEmpty">队列是空的。点右上角「收起」，从列表里点一首歌开始。</div>
+      <ul id="queueList"></ul>
     </div>
   </div>
 </div>
@@ -625,13 +669,14 @@ function playAt(i) {
   $('npArtist').appendChild(document.createTextNode(song.artist || ''));
   $('npAlbum').innerHTML = '';
   $('npAlbum').appendChild(document.createTextNode(song.album || ''));
-  $('playBtn').innerHTML = '⏸';
+  $('playBtn').innerHTML = '❚❚';
   syncReels();
   refreshPlayingMarks();
+  renderQueue();
 }
 function togglePlay() {
   if (!audio.src) return;
-  if (audio.paused) { audio.play(); $('playBtn').innerHTML = '⏸'; }
+  if (audio.paused) { audio.play(); $('playBtn').innerHTML = '❚❚'; }
   else { audio.pause(); $('playBtn').innerHTML = '▶'; }
 }
 var shuffleOn = false;
@@ -729,6 +774,37 @@ $('keyStop').addEventListener('click', function () {
   $('tCur').innerHTML = '0:00';
   setPack(0);
 });
+/* Fullscreen player: the full view is the default; the bar is its shrunk
+   form. The full view carries the queue so songs can be switched there. */
+var fullMode = false;
+function renderQueue() {
+  var ul = $('queueList');
+  ul.innerHTML = '';
+  $('queueEmpty').style.display = queue.length ? 'none' : 'block';
+  var i;
+  for (i = 0; i < queue.length; i++) {
+    (function (idx) {
+      var s = queue[idx];
+      var li = document.createElement('li');
+      if (idx === qIndex) li.className = 'playing';
+      li.appendChild(document.createTextNode(s.title || ''));
+      var sub = document.createElement('span');
+      sub.className = 'sub';
+      sub.appendChild(document.createTextNode((s.artist || '') + (s.album ? ' · ' + s.album : '')));
+      li.appendChild(sub);
+      li.onclick = function () { playAt(idx); };
+      ul.appendChild(li);
+    })(i);
+  }
+}
+function setFull(on) {
+  fullMode = on;
+  $('player').className = on ? 'full' : '';
+  if (on) renderQueue();
+}
+$('expandBtn').onclick = function () { setFull(true); };
+$('collapseBtn').onclick = function () { setFull(false); };
+$('npInfo').onclick = function () { if (!fullMode) setFull(true); };
 
 /* ================= Tabs / nav / login ================= */
 var currentTab = 'playlists';
@@ -769,6 +845,7 @@ function enterApp() {
   $('loginView').style.display = 'none';
   $('appView').style.display = 'block';
   setTab('playlists');
+  setFull(true);
 }
 $('loginBtn').onclick = function () {
   var server = $('server').value, u = $('user').value, p = $('pass').value;
