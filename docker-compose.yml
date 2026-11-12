@@ -5,7 +5,7 @@ services:
     container_name: submini
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "9898:9898"
     environment:
       # Your Subsonic server (Navidrome) address. Override without editing
       # this file: put SUBSONIC_URL=... in a local .env file (gitignored).

@@ -8,7 +8,7 @@
 
 ```bash
 docker compose up -d
-# 打开 http://<家里服务器>:8080 ，用 Navidrome 的账号密码登录
+# 打开 http://<家里服务器>:9898 ，用 Navidrome 的账号密码登录
 ```
 
 环境变量：
@@ -16,7 +16,7 @@ docker compose up -d
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `SUBSONIC_URL` | `http://localhost:4533` | 上游 Subsonic API 地址（Navidrome），如 `http://192.168.1.10:4533`。用 compose 部署时，在同目录建一个 `.env` 文件写 `SUBSONIC_URL=你的地址` 即可覆盖（`.env` 已被 gitignore，不会进仓库） |
-| `LISTEN` | `:8080` | 监听地址 |
+| `LISTEN` | `:9898` | 监听地址 |
 
 ## 功能
 

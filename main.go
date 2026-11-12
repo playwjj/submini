@@ -9,7 +9,7 @@
 // Configuration is environment-only:
 //
 //	SUBSONIC_URL  upstream base URL (default http://localhost:4533)
-//	LISTEN        listen address    (default :8080)
+//	LISTEN        listen address    (default :9898)
 package main
 
 import (
@@ -33,7 +33,7 @@ func main() {
 	}
 	listen := os.Getenv("LISTEN")
 	if listen == "" {
-		listen = ":8080"
+		listen = ":9898"
 	}
 	target, err := url.Parse(upstream)
 	if err != nil || target.Scheme == "" || target.Host == "" {
