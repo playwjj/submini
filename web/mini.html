@@ -12,7 +12,7 @@
   * { -webkit-tap-highlight-color: rgba(255,255,255,0.08); }
   html, body { margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-         background: #0b0d12; color: #eef0f4; font-size: 16px; padding-bottom: 128px; }
+         background: #0b0d12; color: #eef0f4; font-size: 16px; padding-bottom: 216px; }
   button { font-family: inherit; cursor: pointer; }
   /* ---------- login ---------- */
   #loginView { max-width: 420px; margin: 60px auto 0 auto; padding: 0 24px; }
@@ -62,10 +62,19 @@
   /* ---------- player bar ---------- */
   #player { position: fixed; left: 0; right: 0; bottom: 0; background: #171a21; color: #eef0f4;
             z-index: 10; padding: 8px 10px 10px 10px; border-top: 1px solid rgba(255,255,255,0.12); }
-  #npRow { overflow: hidden; }
-  #npCover { float: left; width: 52px; height: 52px; border-radius: 4px; background: #21252f;
-             margin-right: 10px; }
-  #npInfo { overflow: hidden; padding-top: 4px; }
+  /* cassette (simplified from subgram's full-player Walkman) */
+  #cassette { background: #21252f; border: 1px solid rgba(255,255,255,0.12);
+              border-radius: 10px; padding: 8px 10px 10px 10px; }
+  #labelRow { overflow: hidden; }
+  #sideBadge { float: left; border: 1.5px solid #eef0f4; border-radius: 4px;
+               font-weight: bold; font-size: 14px; padding: 1px 6px; margin: 2px 8px 0 0; }
+  #tapeType { float: right; color: rgba(238,240,244,0.55); font-size: 12px; margin-top: 4px; }
+  .stripe { height: 3px; border-radius: 2px; margin-top: 4px; }
+  .stripe.s1 { background: #f2b33d; }
+  .stripe.s2 { background: #ec7f2e; }
+  .stripe.s3 { background: #d9482b; margin-bottom: 7px; }
+  #tapeWindow { background: #0a0a0c; border-radius: 24px; text-align: center; padding: 4px 0; }
+  #npInfo { overflow: hidden; padding-top: 2px; }
   #npTitle { font-size: 16px; font-weight: bold; white-space: nowrap; overflow: hidden;
              text-overflow: ellipsis; }
   #npArtist { font-size: 13px; color: rgba(238,240,244,0.6); white-space: nowrap; overflow: hidden;
@@ -75,6 +84,7 @@
   #ctlRow button { background: none; border: none; color: #eef0f4; font-size: 27px;
                    padding: 4px 14px; }
   #ctlRow button:active { color: #7dd3c0; }
+  #ctlRow button.on { color: #7dd3c0; }
   #timeBox { float: right; color: rgba(238,240,244,0.6); font-size: 13px; line-height: 42px; }
   #progWrap { margin-top: 8px; background: rgba(255,255,255,0.15); height: 8px; border-radius: 4px; }
   #progFill { background: #7dd3c0; height: 8px; border-radius: 4px; width: 0%; }
@@ -84,12 +94,14 @@
 
 <div id="loginView">
   <h1>Submini</h1>
-  <div class="sub">为老 iPad 准备的极简音乐播放器</div>
+  <div class="sub">为老 iPad 准备的极简音乐播放器<br>连接信息保存在后端，设置一次即可</div>
+  <label for="server">服务器地址</label>
+  <input id="server" type="url" autocapitalize="off" autocorrect="off" placeholder="http://192.168.1.10:4533">
   <label for="user">用户名</label>
   <input id="user" type="text" autocapitalize="off" autocorrect="off" autocomplete="username">
   <label for="pass">密码</label>
   <input id="pass" type="password" autocomplete="current-password">
-  <button id="loginBtn">登 录</button>
+  <button id="loginBtn">连接并保存</button>
   <div id="loginMsg"></div>
 </div>
 
@@ -112,16 +124,42 @@
     <ul id="list"></ul>
   </div>
   <div id="player">
-    <div id="npRow">
-      <img id="npCover" alt="">
-      <div id="npInfo">
-        <div id="npTitle">未播放</div>
-        <div id="npArtist">点一首歌开始</div>
+    <div id="cassette">
+      <div id="labelRow">
+        <span id="sideBadge">A</span>
+        <div id="npInfo">
+          <div id="npTitle">未播放</div>
+          <div id="npArtist">点一首歌开始</div>
+        </div>
+        <span id="tapeType">C-60</span>
+      </div>
+      <div class="stripe s1"></div>
+      <div class="stripe s2"></div>
+      <div class="stripe s3"></div>
+      <div id="tapeWindow">
+        <svg id="reels" viewBox="0 0 200 54" width="100%" height="54" preserveAspectRatio="xMidYMid meet">
+          <rect x="55" y="25.5" width="90" height="3" fill="#3a2e26"></rect>
+          <circle id="packL" cx="55" cy="27" r="15" fill="#241d18" stroke="#000" stroke-width="1"></circle>
+          <circle id="packR" cx="145" cy="27" r="9" fill="#241d18" stroke="#000" stroke-width="1"></circle>
+          <g id="reelL">
+            <line x1="55" y1="27" x2="55" y2="17" stroke="#cfd3da" stroke-width="2.5"></line>
+            <line x1="55" y1="27" x2="63.7" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
+            <line x1="55" y1="27" x2="46.3" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
+            <circle cx="55" cy="27" r="4" fill="#cfd3da"></circle>
+          </g>
+          <g id="reelR">
+            <line x1="145" y1="27" x2="145" y2="17" stroke="#cfd3da" stroke-width="2.5"></line>
+            <line x1="145" y1="27" x2="153.7" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
+            <line x1="145" y1="27" x2="136.3" y2="32" stroke="#cfd3da" stroke-width="2.5"></line>
+            <circle cx="145" cy="27" r="4" fill="#cfd3da"></circle>
+          </g>
+        </svg>
       </div>
     </div>
     <div id="progWrap"><div id="progFill"></div></div>
     <div id="ctlRow">
       <div class="btns">
+        <button id="shuffleBtn">🔀</button>
         <button id="prevBtn">⏮</button>
         <button id="playBtn">▶</button>
         <button id="nextBtn">⏭</button>
@@ -133,68 +171,13 @@
 
 <audio id="audio" preload="auto"></audio>
 <script>
-/* ================= MD5 (RFC 1321), ES5, UTF-8 aware ================= */
-function md5hex(input) {
-  var s = unescape(encodeURIComponent(input));
-  var len = s.length;
-  var bytes = [];
-  var i, j;
-  for (i = 0; i < len; i++) bytes.push(s.charCodeAt(i) & 0xff);
-  bytes.push(0x80);
-  while (bytes.length % 64 !== 56) bytes.push(0);
-  var bitLen = len * 8;
-  for (i = 0; i < 4; i++) { bytes.push(bitLen & 0xff); bitLen = Math.floor(bitLen / 256); }
-  for (i = 0; i < 4; i++) bytes.push(0);
-  var K = [];
-  for (i = 0; i < 64; i++) K.push(Math.floor(Math.abs(Math.sin(i + 1)) * 4294967296));
-  var S = [7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
-           5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
-           4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
-           6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21];
-  var a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
-  function rotl(x, n) { return (x << n) | (x >>> (32 - n)); }
-  function wordAt(off) {
-    return (bytes[off] | (bytes[off + 1] << 8) | (bytes[off + 2] << 16) | (bytes[off + 3] << 24)) >>> 0;
-  }
-  for (j = 0; j < bytes.length; j += 64) {
-    var A = a0, B = b0, C = c0, D = d0;
-    for (i = 0; i < 64; i++) {
-      var F, g;
-      if (i < 16)      { F = (B & C) | (~B & D); g = i; }
-      else if (i < 32) { F = (D & B) | (~D & C); g = (5 * i + 1) % 16; }
-      else if (i < 48) { F = B ^ C ^ D;          g = (3 * i + 5) % 16; }
-      else             { F = C ^ (B | ~D);       g = (7 * i) % 16; }
-      var tmp = D;
-      D = C; C = B;
-      B = (B + rotl((A + F + K[i] + wordAt(j + g * 4)) | 0, S[i])) | 0;
-      A = tmp;
-    }
-    a0 = (a0 + A) | 0; b0 = (b0 + B) | 0; c0 = (c0 + C) | 0; d0 = (d0 + D) | 0;
-  }
-  function hexw(w) {
-    var out = '', k, b;
-    for (k = 0; k < 4; k++) {
-      b = (w >>> (k * 8)) & 0xff;
-      out += (b < 16 ? '0' : '') + b.toString(16);
-    }
-    return out;
-  }
-  return hexw(a0) + hexw(b0) + hexw(c0) + hexw(d0);
-}
-
 /* ================= Subsonic API layer ================= */
 var CLIENT = 'submini', APIV = '1.16.1';
-var auth = null;
 function $(id) { return document.getElementById(id); }
 function asArray(x) {
   if (!x) return [];
   if (Object.prototype.toString.call(x) === '[object Array]') return x;
   return [x];
-}
-function makeSalt() {
-  var chars = 'abcdefghijklmnopqrstuvwxyz0123456789', out = '', i;
-  for (i = 0; i < 12; i++) out += chars.charAt(Math.floor(Math.random() * chars.length));
-  return out;
 }
 function restUrl(endpoint, params, json) {
   var q = [];
@@ -202,9 +185,6 @@ function restUrl(endpoint, params, json) {
   for (k in params) {
     if (params.hasOwnProperty(k)) q.push(encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
   }
-  q.push('u=' + encodeURIComponent(auth.u));
-  q.push('t=' + encodeURIComponent(auth.t));
-  q.push('s=' + encodeURIComponent(auth.s));
   q.push('v=' + APIV);
   q.push('c=' + CLIENT);
   if (json) q.push('f=json');
@@ -232,7 +212,6 @@ function api(endpoint, params, ok, fail) {
   xhr.send(null);
 }
 function streamUrl(id) { return restUrl('stream', { id: id, format: 'mp3' }, false); }
-function coverUrl(id) { return restUrl('getCoverArt', { id: id, size: 144 }, false); }
 
 /* ================= UI helpers ================= */
 function fmtTime(sec) {
@@ -466,8 +445,8 @@ function playAt(i) {
   $('npTitle').appendChild(document.createTextNode(song.title || ''));
   $('npArtist').innerHTML = '';
   $('npArtist').appendChild(document.createTextNode(song.artist || ''));
-  $('npCover').src = coverUrl(song.coverArt || song.id);
   $('playBtn').innerHTML = '⏸';
+  syncReels();
   refreshPlayingMarks();
 }
 function togglePlay() {
@@ -475,11 +454,21 @@ function togglePlay() {
   if (audio.paused) { audio.play(); $('playBtn').innerHTML = '⏸'; }
   else { audio.pause(); $('playBtn').innerHTML = '▶'; }
 }
+var shuffleOn = false;
 function next(auto) {
+  if (shuffleOn && queue.length > 1) {
+    var n = qIndex;
+    while (n === qIndex) n = Math.floor(Math.random() * queue.length);
+    playAt(n);
+    return;
+  }
   if (qIndex + 1 < queue.length) playAt(qIndex + 1);
-  else if (!auto) { /* stay */ }
-  else { $('playBtn').innerHTML = '▶'; }
+  else if (auto) { $('playBtn').innerHTML = '▶'; }
 }
+$('shuffleBtn').onclick = function () {
+  shuffleOn = !shuffleOn;
+  $('shuffleBtn').className = shuffleOn ? 'on' : '';
+};
 function prev() {
   if (audio.currentTime > 4) { audio.currentTime = 0; return; }
   if (qIndex > 0) playAt(qIndex - 1);
@@ -490,8 +479,40 @@ audio.addEventListener('timeupdate', function () {
     $('progFill').style.width = (audio.currentTime / audio.duration * 100) + '%';
     $('tCur').innerHTML = fmtTime(audio.currentTime);
     $('tTot').innerHTML = fmtTime(audio.duration);
+    setPack(audio.currentTime / audio.duration);
   }
 });
+/* Cassette reels, JS-driven like subgram's deck (iOS Safari does not
+   reliably repaint CSS-animated SVG). The tape pack moves from the left
+   reel to the right one as the song plays; the emptier reel spins faster. */
+var reelLEl = document.getElementById('reelL'), reelREl = document.getElementById('reelR');
+var packLEl = document.getElementById('packL'), packREl = document.getElementById('packR');
+var angleL = 0, angleR = 0, reelTimer = null, reelLast = 0;
+function setPack(frac) {
+  if (!packLEl) return;
+  packLEl.setAttribute('r', 15 - 6 * frac);
+  packREl.setAttribute('r', 9 + 6 * frac);
+}
+function spinStep(ts) {
+  if (audio.paused || audio.ended) { reelTimer = null; return; }
+  var dt = reelLast ? (ts - reelLast) / 1000 : 0.016;
+  reelLast = ts;
+  if (dt > 0.1) dt = 0.1;
+  var frac = (audio.duration && isFinite(audio.duration)) ? audio.currentTime / audio.duration : 0;
+  var rL = 15 - 6 * frac, rR = 9 + 6 * frac;
+  angleL = (angleL + 900 / rL * dt) % 360;
+  angleR = (angleR + 900 / rR * dt) % 360;
+  reelLEl.setAttribute('transform', 'rotate(' + angleL + ' 55 27)');
+  reelREl.setAttribute('transform', 'rotate(' + angleR + ' 145 27)');
+  reelTimer = requestAnimationFrame(spinStep);
+}
+function syncReels() {
+  if (!audio.paused && !audio.ended && !reelTimer) {
+    reelLast = 0;
+    reelTimer = requestAnimationFrame(spinStep);
+  }
+}
+audio.addEventListener('play', syncReels);
 audio.addEventListener('error', function () {
   if (nowPlayingId) setStatus('这首歌播放失败，可能格式无法转码', true);
 });
@@ -535,12 +556,10 @@ $('backBtn').onclick = function () {
   else setTab(currentTab);
 };
 $('logoutBtn').onclick = function () {
-  try {
-    localStorage.removeItem('sm_u'); localStorage.removeItem('sm_t'); localStorage.removeItem('sm_s');
-  } catch (e) {}
-  auth = null;
+  postJSON('/api/disconnect', {}, function () {}, function () {});
   audio.pause();
   audio.removeAttribute('src');
+  nowPlayingId = null;
   $('appView').style.display = 'none';
   $('loginView').style.display = 'block';
 };
@@ -550,36 +569,44 @@ function enterApp() {
   setTab('playlists');
 }
 $('loginBtn').onclick = function () {
-  var u = $('user').value, p = $('pass').value;
+  var server = $('server').value, u = $('user').value, p = $('pass').value;
   var msg = $('loginMsg');
   msg.innerHTML = '';
-  if (!u || !p) { msg.appendChild(document.createTextNode('请输入用户名和密码')); return; }
-  var salt = makeSalt();
-  auth = { u: u, t: md5hex(p + salt), s: salt };
-  msg.appendChild(document.createTextNode('登录中…'));
-  api('ping', {}, function () {
-    try {
-      localStorage.setItem('sm_u', auth.u);
-      localStorage.setItem('sm_t', auth.t);
-      localStorage.setItem('sm_s', auth.s);
-    } catch (e) {}
+  if (!server || !u || !p) { msg.appendChild(document.createTextNode('服务器地址、用户名、密码都要填')); return; }
+  msg.appendChild(document.createTextNode('连接中…'));
+  postJSON('/api/connect', { server: server, username: u, password: p }, function () {
     msg.innerHTML = '';
     enterApp();
-  }, function () {
+  }, function (errMsg) {
     msg.innerHTML = '';
-    msg.appendChild(document.createTextNode('登录失败：用户名或密码不对，或服务器不可达'));
-    auth = null;
+    msg.appendChild(document.createTextNode(errMsg || '连接失败'));
   });
 };
-/* auto-login from saved token */
+function postJSON(path, obj, ok, fail) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', path, true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    var data = null;
+    try { data = JSON.parse(xhr.responseText); } catch (e) {}
+    if (xhr.status === 200) { ok(data || {}); }
+    else if (fail) { fail(data && data.error ? data.error : ('请求失败（HTTP ' + xhr.status + '）')); }
+  };
+  xhr.send(JSON.stringify(obj));
+}
+/* if the backend already holds a connection, skip the setup form */
 (function () {
-  try {
-    var u = localStorage.getItem('sm_u'), t = localStorage.getItem('sm_t'), s = localStorage.getItem('sm_s');
-    if (u && t && s) {
-      auth = { u: u, t: t, s: s };
-      api('ping', {}, function () { enterApp(); }, function () { auth = null; });
-    }
-  } catch (e) {}
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/status', true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    try {
+      var data = JSON.parse(xhr.responseText);
+      if (data.connected) enterApp();
+    } catch (e) {}
+  };
+  xhr.send(null);
 })();
 </script>
 </body>
