@@ -1,12 +1,11 @@
 name: Docker Hub description
 
 # Keeps the Docker Hub overview in sync with the repo README.
+# Manual dispatch only: updating a repo description needs the Docker Hub
+# account password — a Read & Write access token acquires a JWT but the
+# PATCH is Forbidden. Add a repository secret DOCKERHUB_PASSWORD (the
+# Docker Hub account password) before running this.
 on:
-  push:
-    branches: [main]
-    paths:
-      - README.md
-      - .github/workflows/hub-description.yml
   workflow_dispatch:
 
 jobs:
@@ -17,7 +16,7 @@ jobs:
       - uses: peter-evans/dockerhub-description@v4
         with:
           username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
           repository: ${{ vars.DOCKERHUB_USERNAME }}/submini
           short-description: 为初代 iPad mini（iOS 9）准备的极简 Subsonic 播放器
           readme-filepath: ./README.md
