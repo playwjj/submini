@@ -73,14 +73,15 @@
                background: rgba(120,30,30,0.92); color: #ffe9e9; text-align: center;
                border: 1px solid rgba(255,255,255,0.25); border-radius: 12px;
                padding: 10px 12px; font-size: 14px; }
-  /* home-screen mode: black-translucent status bar — the system
-     glyphs (clock, battery) float over the app's own top 20px instead
-     of a separate black strip, so everything shifts down 22px (the
-     20px the glyphs need, plus a touch of air) (.sa is set from JS
-     only when running standalone; Safari is unaffected). The
-     landscape queue panel is absolutely positioned against the
-     player's top edge, so the player's padding does not move it —
-     it gets its own small nudge. */
+  /* home-screen mode on iOS 10 and earlier: black-translucent status
+     bar — the system glyphs (clock, battery) float over the app's own
+     top 20px instead of a separate black strip, so everything shifts
+     down 22px (the 20px the glyphs need, plus a touch of air). iOS 11+
+     ignores that legacy meta and reserves the status-bar area itself,
+     so .sa must NOT be applied there (it would double the offset) —
+     see needsSaInset() in the script. The landscape queue panel is
+     absolutely positioned against the player's top edge, so the
+     player's padding does not move it — it gets its own small nudge. */
   body.sa #tabs { padding-top: 22px; }
   body.sa #main { padding-top: 78px; }
   body.sa #player.full { padding-top: 38px; }
@@ -1281,10 +1282,24 @@ function themeFor(song) {
 /* ================= Player ================= */
 var queue = [], qIndex = -1, nowPlayingId = null;
 var audio = $('audio');
-/* Home-screen mode: with the translucent status bar the system
-   glyphs overlay the top 20px of the page; the .sa CSS rules shift
-   the layout down by that much. Set as early as possible. */
-if (window.navigator.standalone) document.body.className += ' sa';
+/* The .sa layout shift compensates for the legacy translucent
+   status bar, which only exists on iOS 10 and earlier: there the
+   system glyphs overlay the page's top 20px in home-screen mode.
+   iOS 11+ reserves the status-bar area itself and ignores the
+   black-translucent meta, so applying the shift there would only
+   add a phantom gap. navigator.standalone is iOS-only; when the
+   UA carries no parseable iOS version, assume a legacy system
+   (the page's primary target) — a desktop UA ("Macintosh", iPadOS
+   requesting desktop sites) means a modern system. */
+function needsSaInset() {
+  if (!window.navigator.standalone) return false;
+  var ua = window.navigator.userAgent || '';
+  var m = /OS (\d+)[_.]/.exec(ua);
+  if (m) return parseInt(m[1], 10) < 11;
+  if (ua.indexOf('Macintosh') >= 0) return false;
+  return true;
+}
+if (needsSaInset()) document.body.className += ' sa';
 function markPlayingRow(li, song) {
   if (song.id === nowPlayingId) li.className = li.getAttribute('data-base') + ' playing';
 }
