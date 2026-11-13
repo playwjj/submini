@@ -76,6 +76,17 @@
   #netNotice button { margin-left: 10px; background: rgba(255,255,255,0.16); color: #fff;
                       border: 1px solid rgba(255,255,255,0.35); border-radius: 8px;
                       padding: 4px 12px; font-size: 14px; font-family: inherit; }
+  /* screensaver: two stacked cover-fit layers crossfading (background
+     images, not <img> — background-size: cover works on iOS 9,
+     object-fit does not reliably) */
+  #saver { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 40; background: #000; }
+  .svLay { position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+           background-position: center; background-size: cover; opacity: 0;
+           -webkit-transition: opacity 1.6s ease; transition: opacity 1.6s ease; }
+  .svLay.on { opacity: 1; }
+  #svCap { position: absolute; left: 18px; bottom: 14px; z-index: 2;
+           color: rgba(255,255,255,0.85); font-size: 14px;
+           text-shadow: 0 1px 6px rgba(0,0,0,0.85); }
   #verTagLogin { text-align: center; margin-top: 10px; }
   #verTagApp { float: right; line-height: 38px; margin-right: 10px; }
   /* ---------- app frame ---------- */
@@ -391,6 +402,7 @@
 <body>
 <div id="aurora"></div>
 <div id="netNotice" style="display:none"><span>连不上音乐服务器，播放已停止</span><button id="netRetryBtn">重试</button><button id="netCloseBtn">×</button></div>
+<div id="saver" style="display:none"><div class="svLay" id="svA"></div><div class="svLay" id="svB"></div><div id="svCap"></div></div>
 
 <div id="loginView">
   <img class="logo" src="/icons/apple-touch-icon-180.png" alt="">
@@ -1587,6 +1599,82 @@ $('netRetryBtn').onclick = function () {
   recoverStream();
 };
 $('netCloseBtn').onclick = function () { showNetNotice(false); };
+
+/* Screensaver (home-screen app only): after 5 idle minutes with no
+   music playing, famous paintings and landscapes from the server
+   take over the screen, crossfading every 3 minutes. Any touch, or
+   playback starting, dismisses it. Pictures come only from this
+   server (a bundled public-domain starter set plus a daily-refreshed
+   local set), so it works at LAN speed and offline. */
+var SAVER_IDLE_MS = 5 * 60 * 1000, SAVER_STEP_MS = 3 * 60 * 1000;
+var lastTouchAt = new Date().getTime(), saverOn = false;
+var saverList = [], saverIdx = 0, saverTimer = null, saverFront = 0, saverErrs = 0;
+function noteTouch() {
+  lastTouchAt = new Date().getTime();
+  if (saverOn) stopSaver();
+}
+document.addEventListener('touchstart', noteTouch, true);
+document.addEventListener('mousedown', noteTouch, true);
+audio.addEventListener('play', function () { if (saverOn) stopSaver(); });
+setInterval(function () {
+  if (saverOn || !window.navigator.standalone) return;
+  if ($('appView').style.display === 'none') return;
+  if (!audio.paused) return;
+  if (new Date().getTime() - lastTouchAt >= SAVER_IDLE_MS) startSaver();
+}, 15000);
+function startSaver() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/screensaver', true);
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4 || xhr.status !== 200) return;
+    var list = null;
+    try { list = JSON.parse(xhr.responseText).images; } catch (e) {}
+    if (!list || !list.length) return;
+    saverList = list;
+    saverIdx = Math.floor(Math.random() * list.length);
+    saverOn = true;
+    saverFront = 0;
+    $('svA').className = 'svLay';
+    $('svB').className = 'svLay';
+    $('saver').style.display = 'block';
+    saverShow(saverIdx);
+    saverTimer = setInterval(function () { saverShow(saverIdx + 1); }, SAVER_STEP_MS);
+  };
+  xhr.send(null);
+}
+function saverShow(i) {
+  if (!saverList.length) return;
+  saverIdx = ((i % saverList.length) + saverList.length) % saverList.length;
+  var item = saverList[saverIdx];
+  var backEl = saverFront === 0 ? $('svB') : $('svA');
+  var frontEl = saverFront === 0 ? $('svA') : $('svB');
+  var img = new Image();
+  img.onload = function () {
+    if (!saverOn) return;
+    saverErrs = 0;
+    backEl.style.backgroundImage = 'url(' + item.src + ')';
+    backEl.className = 'svLay on';
+    frontEl.className = 'svLay';
+    saverFront = saverFront === 0 ? 1 : 0;
+    setText('svCap', item.caption || '');
+    var nx = saverList[(saverIdx + 1) % saverList.length];
+    if (nx) { var pre = new Image(); pre.src = nx.src; }
+  };
+  img.onerror = function () {
+    /* skip a broken picture; if every picture fails, give up quietly */
+    if (!saverOn) return;
+    saverErrs++;
+    if (saverErrs >= saverList.length) { stopSaver(); return; }
+    saverShow(saverIdx + 1);
+  };
+  img.src = item.src;
+}
+function stopSaver() {
+  saverOn = false;
+  if (saverTimer) { clearInterval(saverTimer); saverTimer = null; }
+  $('saver').style.display = 'none';
+  lastTouchAt = new Date().getTime();
+}
 /* Seek: tap anywhere on the bar, or drag (touch) with live preview; the
    actual seek happens on release so the stream is hit only once. */
 function fracAt(clientX) {

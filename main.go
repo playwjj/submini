@@ -626,6 +626,9 @@ func main() {
 	})
 	mux.HandleFunc("/api/connect", handleConnect)
 	mux.HandleFunc("/api/status", handleStatus)
+	mux.HandleFunc("/api/screensaver", handleAPIScreensaver(dataDir))
+	mux.HandleFunc("/screensaver/", handleSaverFile(dataDir))
+	startSaverUpdater(dataDir)
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = fmt.Fprintf(w, "{\"version\":%q}\n", version)

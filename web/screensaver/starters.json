@@ -1,0 +1,48 @@
+{
+ "images": [
+  {
+   "file": "starry-night.jpg",
+   "caption": "星月夜 · 梵高"
+  },
+  {
+   "file": "great-wave.jpg",
+   "caption": "神奈川冲浪里 · 葛饰北斋"
+  },
+  {
+   "file": "impression-sunrise.jpg",
+   "caption": "印象·日出 · 莫奈"
+  },
+  {
+   "file": "grande-jatte.jpg",
+   "caption": "大碗岛星期天的下午 · 修拉"
+  },
+  {
+   "file": "view-of-delft.jpg",
+   "caption": "代尔夫特风景 · 维梅尔"
+  },
+  {
+   "file": "fighting-temeraire.jpg",
+   "caption": "战舰无畏号 · 特纳"
+  },
+  {
+   "file": "water-lilies.jpg",
+   "caption": "睡莲 · 莫奈"
+  },
+  {
+   "file": "mont-sainte-victoire.jpg",
+   "caption": "圣维克多山 · 塞尚"
+  },
+  {
+   "file": "starry-rhone.jpg",
+   "caption": "罗讷河上的星夜 · 梵高"
+  },
+  {
+   "file": "wheatfield-crows.jpg",
+   "caption": "乌鸦群飞的麦田 · 梵高"
+  },
+  {
+   "file": "chalk-cliffs.jpg",
+   "caption": "吕根岛白垩悬崖 · 弗里德里希"
+  }
+ ]
+}
