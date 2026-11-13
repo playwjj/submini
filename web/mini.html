@@ -694,6 +694,13 @@ function api(endpoint, params, ok, fail, quiet) {
 }
 function streamUrl(id) { return restUrl('stream', { id: id, format: 'mp3' }, false); }
 function coverUrl(id, size) { return restUrl('getCoverArt', { id: id, size: size || 96 }, false); }
+/* Cassette artwork for anything without a cover. The backend also swaps
+   Navidrome's own (WebP, undecodable on iOS 9) placeholder for it. */
+var PLACEHOLDER = '/icons/cover-placeholder.jpg';
+function setCover(img, id, size) {
+  img.onerror = function () { img.onerror = null; img.src = PLACEHOLDER; };
+  img.src = id ? coverUrl(id, size) : PLACEHOLDER;
+}
 
 /* ================= UI helpers ================= */
 var SVGNS = 'http://www.w3.org/2000/svg';
@@ -790,16 +797,16 @@ function emptyRow(text) {
   });
 }
 /* round: artist avatars; letter placeholder when there is no cover */
-function navRow(title, sub, coverId, onTap, round) {
+function navRow(title, sub, coverId, onTap, round, artPh) {
   addRow(function (li) {
     li.className = 'nav' + (round ? ' round' : '');
     var go = el('span', 'go');
     go.appendChild(chevron());
     li.appendChild(go);
-    if (coverId) {
+    if (coverId || artPh) {
       var img = document.createElement('img');
-      img.src = coverUrl(coverId, 100);
       img.alt = '';
+      setCover(img, coverId, 100);
       li.appendChild(img);
     } else {
       li.appendChild(el('span', 'ph', (title || '?').charAt(0)));
@@ -815,12 +822,10 @@ function cardRow(title, sub, coverId, onTap) {
   addRow(function (li) {
     li.className = 'card';
     var cv = el('div', 'cv');
-    if (coverId) {
-      var img = document.createElement('img');
-      img.src = coverUrl(coverId, 300);
-      img.alt = '';
-      cv.appendChild(img);
-    }
+    var img = document.createElement('img');
+    img.alt = '';
+    setCover(img, coverId, 300);
+    cv.appendChild(img);
     li.appendChild(cv);
     li.appendChild(el('div', 't', title || ''));
     if (sub) li.appendChild(el('div', 's', sub));
@@ -841,7 +846,7 @@ function songRow(song, songs, opts) {
       var img = document.createElement('img');
       img.className = 'th';
       img.alt = '';
-      if (song.coverArt) img.src = coverUrl(song.coverArt, 100);
+      setCover(img, song.coverArt, 100);
       e.appendChild(img);
       base += ' hasTh';
     }
@@ -881,15 +886,11 @@ function iconSvg(cls, inner) {
 function heroRow(kind, title, sub, meta, coverId, songs) {
   addRow(function (li) {
     li.className = 'hero';
-    if (coverId) {
-      var img = document.createElement('img');
-      img.className = 'hcv';
-      img.src = coverUrl(coverId, 400);
-      img.alt = '';
-      li.appendChild(img);
-    } else {
-      li.appendChild(el('div', 'hcv'));
-    }
+    var img = document.createElement('img');
+    img.className = 'hcv';
+    img.alt = '';
+    setCover(img, coverId, 400);
+    li.appendChild(img);
     var t = el('div', 'htxt');
     t.appendChild(el('div', 'hk', kind));
     t.appendChild(el('div', 'ht', title));
@@ -951,7 +952,7 @@ function openAlbum(al) {
   openView(al.name || al.title, function () { vAlbum(al.id); });
 }
 function albumRow(al) {
-  navRow(al.name || al.title, (al.artist || '') + (al.year ? ' · ' + al.year : ''), al.coverArt, function () { openAlbum(al); });
+  navRow(al.name || al.title, (al.artist || '') + (al.year ? ' · ' + al.year : ''), al.coverArt, function () { openAlbum(al); }, false, true);
 }
 function albumCard(al) {
   cardRow(al.name || al.title, (al.artist || '') + (al.year ? ' · ' + al.year : ''), al.coverArt, function () { openAlbum(al); });
@@ -1073,7 +1074,7 @@ function avgRegion(d, w, x0, y0, x1, y1) {
   }
   return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
 }
-function sampleCover(coverId, cb) {
+function sampleCover(src, cb) {
   var img = new Image();
   img.onload = function () {
     var W = 16, c = document.createElement('canvas'), d, i, best = [], hsl, score;
@@ -1102,7 +1103,7 @@ function sampleCover(coverId, cb) {
     });
   };
   img.onerror = function () { cb(null); };
-  img.src = coverUrl(coverId, 64);
+  img.src = src;
 }
 function applyTheme(t) {
   var a = tune(t.a, 0.25, 0.75, 0.22, 0.42);
@@ -1143,8 +1144,7 @@ function themeFor(song) {
   var key = song && song.coverArt ? song.coverArt : '';
   if (key === themeKey) return;
   themeKey = key;
-  if (!key) { applyTheme(DEFAULT_THEME); return; }
-  sampleCover(key, function (t) {
+  sampleCover(key ? coverUrl(key, 64) : PLACEHOLDER, function (t) {
     if (themeKey !== key) return;
     applyTheme(t || DEFAULT_THEME);
   });
@@ -1174,8 +1174,7 @@ function showSong(s) {
   setText('npAlbum', s.album || '');
   $('tapeTitle').textContent = clipText(s.title || '', 30);
   $('tapeArtist').textContent = clipText(s.artist || '', 34);
-  if (s.coverArt) $('barCover').src = coverUrl(s.coverArt, 120);
-  else $('barCover').removeAttribute('src');
+  setCover($('barCover'), s.coverArt, 120);
   if (s.duration) { setText('ftTot', fmtTime(s.duration)); setText('tTot', fmtTime(s.duration)); }
   themeFor(s);
 }
@@ -1386,7 +1385,7 @@ function renderQueue() {
       li.appendChild(qi);
       var img = document.createElement('img');
       img.alt = '';
-      if (s.coverArt) img.src = coverUrl(s.coverArt, 80);
+      setCover(img, s.coverArt, 80);
       li.appendChild(img);
       li.appendChild(el('div', 'qt', s.title || ''));
       li.appendChild(el('span', 'sub', (s.artist || '') + (s.album ? ' · ' + s.album : '')));

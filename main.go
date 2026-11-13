@@ -18,6 +18,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"crypto/rand"
 	"database/sql"
@@ -49,13 +50,47 @@ var playerPage []byte
 //go:embed web/icons
 var iconsFS embed.FS
 
+// placeholderCover replaces cover art the iPad cannot show. Navidrome
+// answers getCoverArt for an album without art with its own placeholder,
+// a WebP image, and iOS 9 Safari cannot decode WebP at all; a missing
+// cover (error status) gets the same treatment.
+func placeholderCover(resp *http.Response) error {
+	if !strings.HasSuffix(strings.TrimSuffix(resp.Request.URL.Path, ".view"), "/getCoverArt") {
+		return nil
+	}
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	if ok && !strings.HasPrefix(resp.Header.Get("Content-Type"), "image/webp") {
+		return nil
+	}
+	data, err := iconsFS.ReadFile("web/icons/cover-placeholder.jpg")
+	if err != nil {
+		return nil
+	}
+	_ = resp.Body.Close()
+	resp.StatusCode = http.StatusOK
+	resp.Status = "200 OK"
+	resp.Body = io.NopCloser(bytes.NewReader(data))
+	resp.ContentLength = int64(len(data))
+	h := resp.Header
+	for _, k := range []string{"Content-Encoding", "Content-Range", "Etag", "Last-Modified", "Transfer-Encoding"} {
+		h.Del(k)
+	}
+	h.Set("Content-Type", "image/jpeg")
+	h.Set("Content-Length", fmt.Sprint(len(data)))
+	return nil
+}
+
 func serveIcon(w http.ResponseWriter, r *http.Request, name string) {
 	data, err := iconsFS.ReadFile("web/icons/" + name)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "image/png")
+	ctype := "image/png"
+	if strings.HasSuffix(name, ".jpg") {
+		ctype = "image/jpeg"
+	}
+	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("Cache-Control", "public, max-age=604800")
 	_, _ = w.Write(data)
 }
@@ -337,8 +372,9 @@ func main() {
 
 	proxy := &httputil.ReverseProxy{
 		// Stream audio without buffering pauses: flush as data arrives.
-		FlushInterval: -1,
-		Transport:     outboundTransport(),
+		FlushInterval:  -1,
+		Transport:      outboundTransport(),
+		ModifyResponse: placeholderCover,
 		Director: func(r *http.Request) {
 			c := current()
 			target := c.base
