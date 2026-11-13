@@ -701,6 +701,32 @@ function setCover(img, id, size) {
   img.onerror = function () { img.onerror = null; img.src = PLACEHOLDER; };
   img.src = id ? coverUrl(id, size) : PLACEHOLDER;
 }
+/* Long song lists (50 random songs, big playlists) used to fire every
+   cover request at once; iOS 9 opens only a few connections per host,
+   so covers trickled in or looked missing. Row covers near the
+   viewport load first — the rest follow while scrolling. */
+var lazyCovers = [], lazyTimer = null;
+function lazyCover(img, id, size) {
+  img.onerror = function () { img.onerror = null; img.src = PLACEHOLDER; };
+  lazyCovers.push({ img: img, id: id, size: size });
+}
+function pumpLazyCovers() {
+  var vh = window.innerHeight || 768, keep = [], i, it, r;
+  for (i = 0; i < lazyCovers.length; i++) {
+    it = lazyCovers[i];
+    if (!document.body.contains(it.img)) continue;
+    r = it.img.getBoundingClientRect();
+    if (r.bottom > -500 && r.top < vh + 500) it.img.src = it.id ? coverUrl(it.id, it.size) : PLACEHOLDER;
+    else keep.push(it);
+  }
+  lazyCovers = keep;
+}
+function lazyKick() {
+  if (lazyTimer) return;
+  lazyTimer = setTimeout(function () { lazyTimer = null; pumpLazyCovers(); }, 120);
+}
+window.addEventListener('scroll', lazyKick, false);
+window.addEventListener('resize', lazyKick, false);
 
 /* ================= UI helpers ================= */
 var SVGNS = 'http://www.w3.org/2000/svg';
@@ -846,7 +872,7 @@ function songRow(song, songs, opts) {
       var img = document.createElement('img');
       img.className = 'th';
       img.alt = '';
-      setCover(img, song.coverArt, 100);
+      lazyCover(img, song.coverArt, 100);
       e.appendChild(img);
       base += ' hasTh';
     }
@@ -876,6 +902,7 @@ function songRows(songs, opts) {
     songRow(songs[i], songs, { num: opts && opts.num, idx: i });
   }
   if (songs.length === 0) emptyRow('（空）');
+  pumpLazyCovers();
 }
 function iconSvg(cls, inner) {
   var wrap = document.createElement('span');

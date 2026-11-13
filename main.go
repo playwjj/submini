@@ -80,6 +80,118 @@ func placeholderCover(resp *http.Response) error {
 	return nil
 }
 
+// ---------------- cover cache ----------------
+// Cover art is immutable per (id, size), but the random-songs view asks
+// for ~50 fresh covers at once, most never requested before, while iOS 9
+// Safari only opens a handful of connections per host — bursts trickled
+// in (or looked broken) while Navidrome generated every resize live.
+// Cache covers in memory after the WebP swap, and let the browser keep
+// them for a week as well.
+const (
+	coverCacheMaxTotal = 32 << 20
+	coverCacheMaxEntry = 2 << 20
+)
+
+type coverEntry struct {
+	ctype string
+	body  []byte
+}
+
+type coverStore struct {
+	mu    sync.Mutex
+	items map[string]*coverEntry
+	order []string
+	bytes int
+}
+
+var covers = &coverStore{items: make(map[string]*coverEntry)}
+
+func (c *coverStore) get(key string) (*coverEntry, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.items[key]
+	return e, ok
+}
+
+func (c *coverStore) put(key string, e *coverEntry) {
+	if len(e.body) == 0 || len(e.body) > coverCacheMaxEntry {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if old, ok := c.items[key]; ok {
+		c.bytes -= len(old.body)
+	} else {
+		c.order = append(c.order, key)
+	}
+	c.items[key] = e
+	c.bytes += len(e.body)
+	for c.bytes > coverCacheMaxTotal && len(c.order) > 0 {
+		k := c.order[0]
+		c.order = c.order[1:]
+		if old, ok := c.items[k]; ok {
+			c.bytes -= len(old.body)
+			delete(c.items, k)
+		}
+	}
+}
+
+func isCoverArt(path string) bool {
+	return strings.HasSuffix(strings.TrimSuffix(path, ".view"), "/getCoverArt")
+}
+
+// coverTransport caches getCoverArt responses (after the placeholder
+// swap, so the cached bytes are always ones the iPad can decode).
+type coverTransport struct{ base http.RoundTripper }
+
+func (t coverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.Method != http.MethodGet || !isCoverArt(req.URL.Path) || req.Header.Get("Range") != "" {
+		return t.base.RoundTrip(req)
+	}
+	key := req.URL.String()
+	if e, ok := covers.get(key); ok {
+		h := make(http.Header)
+		h.Set("Content-Type", e.ctype)
+		h.Set("Content-Length", fmt.Sprint(len(e.body)))
+		h.Set("Cache-Control", "public, max-age=604800")
+		return &http.Response{
+			Status: "200 OK", StatusCode: http.StatusOK,
+			Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1,
+			Header: h, ContentLength: int64(len(e.body)),
+			Body:    io.NopCloser(bytes.NewReader(e.body)),
+			Request: req,
+		}, nil
+	}
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+	// Was this already a decodable image before the swap? Only genuine
+	// covers are cached — a swapped placeholder must not pin an album
+	// that gains real art later to the cassette picture.
+	ct := resp.Header.Get("Content-Type")
+	genuine := resp.StatusCode >= 200 && resp.StatusCode < 300 &&
+		strings.HasPrefix(ct, "image/") && !strings.HasPrefix(ct, "image/webp")
+	// The same swap ModifyResponse performs; applying it here first
+	// makes its second run a no-op.
+	if err := placeholderCover(resp); err != nil {
+		return resp, err
+	}
+	if genuine && resp.StatusCode == http.StatusOK {
+		body, rerr := io.ReadAll(io.LimitReader(resp.Body, coverCacheMaxEntry+1))
+		if rerr != nil {
+			_ = resp.Body.Close()
+			return nil, rerr
+		}
+		_ = resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+		resp.ContentLength = int64(len(body))
+		resp.Header.Set("Cache-Control", "public, max-age=604800")
+		covers.put(key, &coverEntry{ctype: resp.Header.Get("Content-Type"), body: body})
+	}
+	return resp, nil
+}
+
 func serveIcon(w http.ResponseWriter, r *http.Request, name string) {
 	data, err := iconsFS.ReadFile("web/icons/" + name)
 	if err != nil {
@@ -373,7 +485,7 @@ func main() {
 	proxy := &httputil.ReverseProxy{
 		// Stream audio without buffering pauses: flush as data arrives.
 		FlushInterval:  -1,
-		Transport:      outboundTransport(),
+		Transport:      coverTransport{base: outboundTransport()},
 		ModifyResponse: placeholderCover,
 		Director: func(r *http.Request) {
 			c := current()
