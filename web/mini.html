@@ -257,6 +257,7 @@
   /* ---------- compact bar (the minimised player): one row, ~72px ---------- */
   #barCover { display: none; }
   #player:not(.full) { padding: 10px 14px; }
+  #player:not(.full) #leftCol { position: static; }
   #player:not(.full) #walkman, #player:not(.full) #npAlbum, #player:not(.full) #timeBox,
   #player:not(.full) #shuffleBtn { display: none; }
   #player:not(.full) #barCover { display: block; float: left; width: 52px; height: 52px; margin-right: 12px;
@@ -348,8 +349,10 @@
      right that scrolls on its own. */
   @media (orientation: landscape) and (min-width: 900px) {
     #player.full { overflow: hidden; padding: 14px 0 0 0; }
-    #player.full #fullHead, #player.full #npRow, #player.full #progWrap,
-    #player.full #fullTimes, #player.full #ctlRow { width: 46%; margin-left: 2%; }
+    #player.full #fullHead { width: 46%; margin-left: 2%; }
+    /* deck + info + controls centred vertically in the space under the header */
+    #player.full #leftCol { position: absolute; left: 2%; width: 46%; top: 50%; margin-top: 22px;
+                            -webkit-transform: translateY(-50%); transform: translateY(-50%); }
     #player.full #fullHead { text-align: left; }
     #player.full #fullHead .cap { margin: 0 0 0 14px; }
     #player.full #walkman { width: 340px; margin: 6px auto 0 auto; }
@@ -423,6 +426,7 @@
     <button id="collapseBtn" title="收起"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
     <span class="cap">正在播放</span>
   </div>
+  <div id="leftCol">
   <div id="npRow">
     <div id="walkman">
         <svg viewBox="0 0 360 312" width="228" height="198">
@@ -634,6 +638,7 @@
     </div>
     <button id="expandBtn" class="miniBtn">全屏</button>
     <div id="timeBox"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
+  </div>
   </div>
   <div id="queueBox">
     <div class="qhead">播放队列<span id="queueCount" class="qn"></span>
