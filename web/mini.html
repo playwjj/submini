@@ -1253,6 +1253,79 @@ function refreshPlayingMarks() {
     if (sid) lis[i].className = lis[i].getAttribute('data-base') + (sid === nowPlayingId ? ' playing' : '');
   }
 }
+/* Playback state survives the home-screen app being killed. iOS 9
+   terminates standalone web apps when they are left, which stops the
+   audio and reloads the page on return — no web API can keep audio
+   playing from a killed app (a Safari tab survives only because
+   Safari itself stays resident). What the page CAN do is remember
+   the queue, the track and the position, and restore them on the
+   next open, paused at the same second: one tap on Play resumes.
+   State is saved on every track change, pause and seek, every 5s
+   while playing, and again when the page is hidden or unloaded. */
+var STATE_KEY = 'submini-state-v1';
+var pendingSeek = 0, lastStateSave = 0;
+function saveState() {
+  try {
+    if (!queue.length || qIndex < 0 || !queue[qIndex]) return;
+    var slim = [], i, s;
+    for (i = 0; i < queue.length; i++) {
+      s = queue[i];
+      slim.push({ id: s.id, title: s.title, artist: s.artist, album: s.album, duration: s.duration, coverArt: s.coverArt });
+    }
+    localStorage.setItem(STATE_KEY, JSON.stringify({
+      q: slim, i: qIndex, pos: audio.currentTime || 0, t: new Date().getTime()
+    }));
+  } catch (e) {}
+}
+function loadState() {
+  try {
+    var raw = localStorage.getItem(STATE_KEY);
+    if (!raw) return null;
+    var st = JSON.parse(raw);
+    if (!st || !st.q || !st.q.length) return null;
+    if (new Date().getTime() - (st.t || 0) > 7 * 24 * 3600 * 1000) return null;
+    return st;
+  } catch (e) { return null; }
+}
+function clearState() {
+  try { localStorage.removeItem(STATE_KEY); } catch (e) {}
+}
+function restoreState() {
+  var st = loadState();
+  if (!st) return false;
+  queue = st.q;
+  qIndex = Math.min(st.i || 0, queue.length - 1);
+  if (qIndex < 0) qIndex = 0;
+  var song = queue[qIndex];
+  nowPlayingId = song.id;
+  audio.src = streamUrl(song.id);
+  pendingSeek = st.pos || 0;
+  showSong(song);
+  if (song.duration && pendingSeek > 0) {
+    var frac = Math.min(pendingSeek / song.duration, 1);
+    setProgress(frac);
+    setPack(frac);
+    setText('tCur', fmtTime(pendingSeek));
+    setText('ftCur', fmtTime(pendingSeek));
+  }
+  setPlayIcon(false);
+  renderQueue();
+  refreshPlayingMarks();
+  scrollQueueToCurrent();
+  return true;
+}
+audio.addEventListener('loadedmetadata', function () {
+  if (pendingSeek > 0) {
+    try { audio.currentTime = pendingSeek; } catch (e) {}
+    pendingSeek = 0;
+  }
+});
+audio.addEventListener('pause', saveState);
+audio.addEventListener('seeked', saveState);
+window.addEventListener('pagehide', saveState, false);
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) saveState();
+}, false);
 function playFromList(songs, idx) {
   queue = songs.slice(0);
   playAt(idx);
@@ -1284,6 +1357,7 @@ function playAt(i) {
   refreshPlayingMarks();
   renderQueue();
   scrollQueueToCurrent();
+  saveState();
 }
 function setPlayIcon(playing) {
   $('icoPlay').style.display = playing ? 'none' : 'inline-block';
@@ -1338,6 +1412,10 @@ function setProgress(frac) {
   $('progFill').style.width = (frac * 100) + '%';
 }
 audio.addEventListener('timeupdate', function () {
+  if (Math.abs((audio.currentTime || 0) - lastStateSave) > 5) {
+    lastStateSave = audio.currentTime || 0;
+    saveState();
+  }
   if (audio.duration && isFinite(audio.duration)) {
     if (!dragging) {
       setProgress(audio.currentTime / audio.duration);
@@ -1556,6 +1634,7 @@ $('backBtn').onclick = function () {
 };
 $('logoutBtn').onclick = function () {
   postJSON('/api/disconnect', {}, function () {}, function () {});
+  clearState();
   audio.pause();
   audio.removeAttribute('src');
   nowPlayingId = null;
@@ -1585,7 +1664,9 @@ function enterApp() {
   applyTheme(DEFAULT_THEME);
   setTab('playlists');
   setFull(true);
-  loadRandomQueue();
+  /* a killed home-screen app comes back here: restore the exact
+     queue/track/position if there is saved state, else prefill */
+  if (!restoreState()) loadRandomQueue();
 }
 $('loginBtn').onclick = function () {
   var server = $('server').value, u = $('user').value, p = $('pass').value;
