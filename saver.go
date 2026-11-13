@@ -38,11 +38,13 @@ var saverFS embed.FS
 type saverItem struct {
 	Src     string `json:"src"`
 	Caption string `json:"caption"`
+	Kind    string `json:"kind,omitempty"` // "photo" (Bing) or "art" (Met, starters)
 }
 
 type saverFile struct {
 	File    string `json:"file"`
 	Caption string `json:"caption"`
+	Kind    string `json:"kind,omitempty"`
 }
 
 func saverStarters() []saverItem {
@@ -58,7 +60,7 @@ func saverStarters() []saverItem {
 	}
 	out := make([]saverItem, 0, len(man.Images))
 	for _, im := range man.Images {
-		out = append(out, saverItem{Src: "/screensaver/starter/" + im.File, Caption: im.Caption})
+		out = append(out, saverItem{Src: "/screensaver/starter/" + im.File, Caption: im.Caption, Kind: "art"})
 	}
 	return out
 }
@@ -78,7 +80,7 @@ func saverDownloaded(dataDir string) []saverItem {
 	}
 	out := make([]saverItem, 0, len(idx.Images))
 	for _, im := range idx.Images {
-		out = append(out, saverItem{Src: "/screensaver/dl/" + im.File, Caption: im.Caption})
+		out = append(out, saverItem{Src: "/screensaver/dl/" + im.File, Caption: im.Caption, Kind: im.Kind})
 	}
 	return out
 }
@@ -359,7 +361,7 @@ func fetchBing(client *http.Client, dir string) []saverFile {
 			continue
 		}
 		if name, ok := storeSaverImage(dir, imgURL, raw); ok {
-			out = append(out, saverFile{File: name, Caption: bingCaption(im.Copyright)})
+			out = append(out, saverFile{File: name, Caption: bingCaption(im.Copyright), Kind: "photo"})
 		}
 	}
 	return out
@@ -441,7 +443,7 @@ func fetchMet(client *http.Client, dir string) []saverFile {
 			caption += obj.Artist
 		}
 		if name, ok := storeSaverImage(dir, obj.PrimaryImageSmall, raw); ok {
-			out = append(out, saverFile{File: name, Caption: caption})
+			out = append(out, saverFile{File: name, Caption: caption, Kind: "art"})
 		}
 	}
 	return out

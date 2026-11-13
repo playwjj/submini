@@ -1639,6 +1639,25 @@ setInterval(function () {
   if (!audio.paused) return;
   if (new Date().getTime() - lastTouchAt >= SAVER_IDLE_MS) startSaver();
 }, 15000);
+/* Weave photos and paintings together proportionally, so the
+   rotation never runs a long single-theme stretch: at each step the
+   group that is furthest behind its share of the set goes next. */
+function interleaveSaver(list) {
+  var photos = [], arts = [], i;
+  for (i = 0; i < list.length; i++) {
+    if (list[i].kind === 'photo') photos.push(list[i]); else arts.push(list[i]);
+  }
+  if (!photos.length || !arts.length) return list;
+  var out = [], pi = 0, ai = 0, total = photos.length + arts.length, k;
+  for (k = 0; k < total; k++) {
+    if (ai >= arts.length || (pi < photos.length && pi / photos.length <= ai / arts.length)) {
+      out.push(photos[pi]); pi++;
+    } else {
+      out.push(arts[ai]); ai++;
+    }
+  }
+  return out;
+}
 function startSaver() {
   var xhr = new XMLHttpRequest();
   xhr.open('GET', '/api/screensaver', true);
@@ -1647,7 +1666,7 @@ function startSaver() {
     var list = null;
     try { list = JSON.parse(xhr.responseText).images; } catch (e) {}
     if (!list || !list.length) return;
-    saverList = list;
+    saverList = interleaveSaver(list);
     saverIdx = Math.floor(Math.random() * list.length);
     saverOn = true;
     saverFront = 0;
