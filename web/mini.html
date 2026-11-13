@@ -1455,6 +1455,7 @@ function playAt(i) {
   audio.src = streamUrl(song.id);
   audio.play();
   showSong(song);
+  updateMediaSession(song);
   setProgress(0);
   setText('tCur', '0:00');
   setText('ftCur', '0:00');
@@ -1824,6 +1825,9 @@ function pokeDrift() {
 }
 function setDeckState(playing) {
   setPlayIcon(playing);
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'; } catch (e) {}
+  }
   toggleClass(document.body, 'isPlaying', playing);
   var led = $('playLed');
   if (led) led.setAttribute('fill', playing ? 'url(#wmLedOn)' : 'url(#wmLedOff)');
@@ -1835,6 +1839,36 @@ function setDeckState(playing) {
 }
 audio.addEventListener('play', function () { setDeckState(true); pokeDrift(); });
 audio.addEventListener('pause', function () { setDeckState(false); });
+/* Media Session — progressive enhancement for modern browsers:
+   track info and artwork on the lock screen / Control Center, and
+   play / pause / next / previous / seek from there or from headphone
+   controls. The feature check is false on iOS 9, so the old iPad is
+   completely unaffected. */
+function absUrl(u) {
+  if (u && u.charAt(0) === '/') return window.location.protocol + '//' + window.location.host + u;
+  return u;
+}
+function updateMediaSession(song) {
+  if (!('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+  try {
+    var art = [];
+    if (song.coverArt) art.push({ src: absUrl(coverUrl(song.coverArt, 300)), sizes: '300x300', type: 'image/jpeg' });
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title || '', artist: song.artist || '', album: song.album || '', artwork: art
+    });
+  } catch (e) {}
+}
+if ('mediaSession' in navigator) {
+  try {
+    navigator.mediaSession.setActionHandler('play', function () { audio.play(); });
+    navigator.mediaSession.setActionHandler('pause', function () { audio.pause(); });
+    navigator.mediaSession.setActionHandler('previoustrack', function () { prev(); });
+    navigator.mediaSession.setActionHandler('nexttrack', function () { next(false); });
+    navigator.mediaSession.setActionHandler('seekto', function (d) {
+      if (d && d.seekTime != null) { try { audio.currentTime = d.seekTime; } catch (e) {} }
+    });
+  } catch (e) {}
+}
 audio.addEventListener('ended', function () { if (audio.paused) setDeckState(false); });
 $('keyPrev').addEventListener('click', prev);
 $('keyPlay').addEventListener('click', togglePlay);
