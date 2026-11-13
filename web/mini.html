@@ -698,16 +698,55 @@ function coverUrl(id, size) { return restUrl('getCoverArt', { id: id, size: size
    Navidrome's own (WebP, undecodable on iOS 9) placeholder for it. */
 var PLACEHOLDER = '/icons/cover-placeholder.jpg';
 function setCover(img, id, size) {
-  img.onerror = function () { img.onerror = null; img.src = PLACEHOLDER; };
-  img.src = id ? coverUrl(id, size) : PLACEHOLDER;
+  queueCover(img, id ? coverUrl(id, size) : PLACEHOLDER);
 }
-/* Long song lists (50 random songs, big playlists) used to fire every
-   cover request at once; iOS 9 opens only a few connections per host,
-   so covers trickled in or looked missing. Row covers near the
-   viewport load first — the rest follow while scrolling. */
+/* Every cover in the page loads through this queue: at most 4 in
+   flight at a time. One view alone (artists, ~1900 covers) otherwise
+   fires thousands of requests at once, and iOS 9's handful of
+   per-host connections stay wedged for every view opened after it —
+   covers elsewhere then never load at all. The pump is deferred a
+   tick so rows are attached first: covers of rows a view change has
+   already removed are dropped instead of hogging the queue. A stuck
+   image is given up on after 10s so the queue can never wedge. */
+var coverQ = [], coverBusy = 0, coverPumpArmed = false;
+function queueCover(img, url) {
+  coverQ.push({ img: img, url: url });
+  if (!coverPumpArmed) {
+    coverPumpArmed = true;
+    setTimeout(function () { coverPumpArmed = false; pumpCoverQ(); }, 0);
+  }
+}
+function pumpCoverQ() {
+  while (coverBusy < 4 && coverQ.length) {
+    var it = coverQ.shift();
+    if (!document.body.contains(it.img)) continue;
+    coverBusy++;
+    startCover(it);
+  }
+}
+function startCover(it) {
+  var img = it.img, done = false;
+  function fin() {
+    if (done) return;
+    done = true;
+    coverBusy--;
+    pumpCoverQ();
+  }
+  img.onload = fin;
+  img.onerror = function () {
+    img.onerror = null;
+    img.onload = null;
+    img.src = PLACEHOLDER;
+    fin();
+  };
+  setTimeout(fin, 10000);
+  img.src = it.url;
+}
+/* Long song lists (50 random songs, big playlists): row covers near
+   the viewport enter the load queue first — the rest follow while
+   scrolling, instead of all competing at once. */
 var lazyCovers = [], lazyTimer = null;
 function lazyCover(img, id, size) {
-  img.onerror = function () { img.onerror = null; img.src = PLACEHOLDER; };
   lazyCovers.push({ img: img, id: id, size: size });
 }
 function pumpLazyCovers() {
@@ -716,7 +755,7 @@ function pumpLazyCovers() {
     it = lazyCovers[i];
     if (!document.body.contains(it.img)) continue;
     r = it.img.getBoundingClientRect();
-    if (r.bottom > -500 && r.top < vh + 500) it.img.src = it.id ? coverUrl(it.id, it.size) : PLACEHOLDER;
+    if (r.bottom > -500 && r.top < vh + 500) queueCover(it.img, it.id ? coverUrl(it.id, it.size) : PLACEHOLDER);
     else keep.push(it);
   }
   lazyCovers = keep;
@@ -916,7 +955,7 @@ function heroRow(kind, title, sub, meta, coverId, songs) {
     var img = document.createElement('img');
     img.className = 'hcv';
     img.alt = '';
-    setCover(img, coverId, 400);
+    setCover(img, coverId, 300);
     li.appendChild(img);
     var t = el('div', 'htxt');
     t.appendChild(el('div', 'hk', kind));
@@ -1013,15 +1052,39 @@ function vArtists() {
   api('getArtists', {}, function (root) {
     clearList();
     var indexes = asArray(root.artists && root.artists.index);
-    var any = false, i, j;
+    /* Flatten to a (section, artist) plan and render 100 artists at a
+       time behind a "show more" row: this library has ~1900 artists,
+       and one page of ~1900 rows — each with a cover request — is
+       what wedged image loading for every view opened after it. */
+    var plan = [], i, j;
     for (i = 0; i < indexes.length; i++) {
       var artists = asArray(indexes[i].artist);
       if (artists.length === 0) continue;
-      any = true;
-      sectionRow(indexes[i].name || '');
-      for (j = 0; j < artists.length; j++) artistRow(artists[j]);
+      plan.push({ sec: indexes[i].name || '' });
+      for (j = 0; j < artists.length; j++) plan.push({ ar: artists[j] });
     }
-    if (!any) emptyRow('没有歌手');
+    if (plan.length === 0) { emptyRow('没有歌手'); return; }
+    var pos = 0, moreLi = null;
+    function renderChunk() {
+      if (moreLi && moreLi.parentNode) moreLi.parentNode.removeChild(moreLi);
+      moreLi = null;
+      var n = 0;
+      while (pos < plan.length && n < 100) {
+        var it = plan[pos++];
+        if (it.ar) { artistRow(it.ar); n++; }
+        else sectionRow(it.sec);
+      }
+      if (pos < plan.length) {
+        var left = 0, k;
+        for (k = pos; k < plan.length; k++) if (plan[k].ar) left++;
+        moreLi = addRow(function (li) {
+          li.className = 'nav';
+          li.appendChild(el('div', 't', '显示更多（还剩 ' + left + ' 位歌手）'));
+          li.onclick = renderChunk;
+        });
+      }
+    }
+    renderChunk();
   }, function () { clearList(); });
 }
 function vArtist(id) {
@@ -1171,7 +1234,7 @@ function themeFor(song) {
   var key = song && song.coverArt ? song.coverArt : '';
   if (key === themeKey) return;
   themeKey = key;
-  sampleCover(key ? coverUrl(key, 64) : PLACEHOLDER, function (t) {
+  sampleCover(key ? coverUrl(key, 100) : PLACEHOLDER, function (t) {
     if (themeKey !== key) return;
     applyTheme(t || DEFAULT_THEME);
   });
@@ -1201,7 +1264,7 @@ function showSong(s) {
   setText('npAlbum', s.album || '');
   $('tapeTitle').textContent = clipText(s.title || '', 30);
   $('tapeArtist').textContent = clipText(s.artist || '', 34);
-  setCover($('barCover'), s.coverArt, 120);
+  setCover($('barCover'), s.coverArt, 100);
   if (s.duration) { setText('ftTot', fmtTime(s.duration)); setText('tTot', fmtTime(s.duration)); }
   themeFor(s);
 }
@@ -1412,7 +1475,7 @@ function renderQueue() {
       li.appendChild(qi);
       var img = document.createElement('img');
       img.alt = '';
-      setCover(img, s.coverArt, 80);
+      setCover(img, s.coverArt, 100);
       li.appendChild(img);
       li.appendChild(el('div', 'qt', s.title || ''));
       li.appendChild(el('span', 'sub', (s.artist || '') + (s.album ? ' · ' + s.album : '')));
