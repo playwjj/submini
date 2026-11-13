@@ -1468,6 +1468,7 @@ function playAt(i) {
   pokeDrift();
   wdSuspend = false;
   wdFails = 0;
+  clearWdStatus();
   showNetNotice(false);
 }
 function setPlayIcon(playing) {
@@ -1571,6 +1572,10 @@ function syncReels() {
 audio.addEventListener('play', syncReels);
 audio.addEventListener('error', function () {
   if (!nowPlayingId || wdSuspend) return;
+  /* A paused element is the user's business: a late error event after
+     a manual pause must not trigger a reconnect (which would also
+     un-pause against the user's intent and strand its status text). */
+  if (audio.paused) return;
   if (audio.networkState === 3 || (audio.error && audio.error.code === 2)) {
     /* network failure (MEDIA_ERR_NETWORK / NETWORK_NO_SOURCE): go
        through the watchdog's retry path instead of dying silently */
@@ -1590,6 +1595,17 @@ audio.addEventListener('error', function () {
    Safari keeps audio playing in the background, so a stale reading
    on return would be a false alarm. */
 var wdLastTime = 0, wdLastAdvance = 0, wdFails = 0, wdStallPos = 0, wdSuspend = false;
+var wdStatusShown = false;
+/* The reconnect status is a claim about the present, so every exit
+   from the reconnecting state must retract it: recovery confirmed,
+   the user pausing (or picking another track), or giving up to the
+   offline notice. Without this the text outlives its truth and only
+   an unrelated page load overwrites it. */
+function clearWdStatus() {
+  if (!wdStatusShown) return;
+  wdStatusShown = false;
+  setStatus('', false);
+}
 function wdReset() {
   wdLastTime = audio.currentTime || 0;
   wdLastAdvance = new Date().getTime();
@@ -1603,18 +1619,19 @@ function recoverStream() {
 }
 function wdOnStall() {
   wdFails++;
-  if (wdFails > 3) { showNetNotice(true); return; }
+  if (wdFails > 3) { clearWdStatus(); showNetNotice(true); return; }
+  wdStatusShown = true;
   setStatus('播放中断，正在重连…', true);
   recoverStream();
 }
 setInterval(function () {
   if (wdSuspend || document.hidden) { wdReset(); return; }
-  if (!nowPlayingId || audio.paused || audio.ended) { wdReset(); return; }
+  if (!nowPlayingId || audio.paused || audio.ended) { clearWdStatus(); wdReset(); return; }
   var t = audio.currentTime || 0;
   if (Math.abs(t - wdLastTime) > 0.25) {
     wdLastTime = t;
     wdLastAdvance = new Date().getTime();
-    if (wdFails && t > wdStallPos + 2) { wdFails = 0; showNetNotice(false); }
+    if (wdFails && t > wdStallPos + 2) { wdFails = 0; showNetNotice(false); clearWdStatus(); }
     return;
   }
   if (new Date().getTime() - wdLastAdvance >= 10000) {
@@ -1629,6 +1646,8 @@ function showNetNotice(on) {
 $('netRetryBtn').onclick = function () {
   showNetNotice(false);
   wdFails = 0;
+  wdStatusShown = true;
+  setStatus('播放中断，正在重连…', true);
   recoverStream();
 };
 $('netCloseBtn').onclick = function () { showNetNotice(false); };
