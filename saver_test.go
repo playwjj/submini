@@ -64,6 +64,21 @@ func TestStoreSaverImage(t *testing.T) {
 	}
 }
 
+func TestMergeSaverIndex(t *testing.T) {
+	old := []saverFile{{File: "ss-a.jpg", Caption: "A"}, {File: "ss-b.jpg", Caption: "B"}, {File: "ss-c.jpg", Caption: "C"}}
+	fresh := []saverFile{{File: "ss-d.jpg", Caption: "D"}, {File: "ss-b.jpg", Caption: "B2"}}
+	got := mergeSaverIndex(old, fresh, 24)
+	if len(got) != 4 || got[0].File != "ss-d.jpg" || got[1].File != "ss-b.jpg" || got[1].Caption != "B2" || got[2].File != "ss-a.jpg" || got[3].File != "ss-c.jpg" {
+		t.Errorf("merge = %+v", got)
+	}
+	if got := mergeSaverIndex(old, fresh, 2); len(got) != 2 || got[1].File != "ss-b.jpg" {
+		t.Errorf("capped merge = %+v", got)
+	}
+	if got := mergeSaverIndex(nil, fresh, 24); len(got) != 2 {
+		t.Errorf("merge into empty = %+v", got)
+	}
+}
+
 func TestSaverStarters(t *testing.T) {
 	items := saverStarters()
 	if len(items) < 8 {

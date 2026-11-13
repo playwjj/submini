@@ -8,7 +8,9 @@ package main
 // (landscapes) and public-domain works from the Metropolitan Museum's
 // Open Access API. (The Art Institute of Chicago's API was the first
 // choice for paintings but sits behind a bot challenge; the Met's API
-// is open and keyless.) A failed or empty update keeps the old set.
+// is open and keyless.) Updates merge into the existing set (newest
+// first, capped), so a partially successful day still lands; a day
+// with zero new pictures leaves the set untouched.
 
 import (
 	"bytes"
@@ -141,13 +143,14 @@ func runSaverUpdate(dataDir string) {
 		return
 	}
 	client := &http.Client{Transport: outboundTransport(), Timeout: 45 * time.Second}
-	var items []saverFile
-	items = append(items, fetchBing(client, dir)...)
-	items = append(items, fetchMet(client, dir)...)
-	if len(items) < 4 {
-		log.Printf("submini: screensaver update kept previous set (only %d new pictures)", len(items))
+	var fresh []saverFile
+	fresh = append(fresh, fetchBing(client, dir)...)
+	fresh = append(fresh, fetchMet(client, dir)...)
+	if len(fresh) == 0 {
+		log.Printf("submini: screensaver update found no new pictures, keeping existing set")
 		return
 	}
+	items := mergeSaverIndex(readSaverIndex(dir), fresh, 24)
 	idx, _ := json.Marshal(map[string]interface{}{"images": items})
 	tmp := filepath.Join(dir, "index.json.tmp")
 	if os.WriteFile(tmp, idx, 0o644) == nil {
@@ -164,7 +167,44 @@ func runSaverUpdate(dataDir string) {
 			}
 		}
 	}
-	log.Printf("submini: screensaver updated, %d pictures", len(items))
+	log.Printf("submini: screensaver updated, %d new pictures (set now %d)", len(fresh), len(items))
+}
+
+func readSaverIndex(dir string) []saverFile {
+	data, err := os.ReadFile(filepath.Join(dir, "index.json"))
+	if err != nil {
+		return nil
+	}
+	var idx struct {
+		Images []saverFile `json:"images"`
+	}
+	if json.Unmarshal(data, &idx) != nil {
+		return nil
+	}
+	return idx.Images
+}
+
+// mergeSaverIndex puts fresh downloads first, then the previous set
+// (skipping files a fresh download replaced), capped at limit.
+func mergeSaverIndex(old, fresh []saverFile, limit int) []saverFile {
+	seen := make(map[string]bool, len(fresh))
+	out := make([]saverFile, 0, len(fresh)+len(old))
+	for _, it := range fresh {
+		if !seen[it.File] {
+			seen[it.File] = true
+			out = append(out, it)
+		}
+	}
+	for _, it := range old {
+		if !seen[it.File] {
+			seen[it.File] = true
+			out = append(out, it)
+		}
+	}
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out
 }
 
 func saverGet(client *http.Client, rawurl string, maxBytes int64) ([]byte, error) {
@@ -297,6 +337,12 @@ func bingCaption(s string) string {
 
 func fetchBing(client *http.Client, dir string) []saverFile {
 	data, err := saverGet(client, "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=zh-CN", 1<<20)
+	if err != nil {
+		/* one retry: a bare EOF/reset on this endpoint is common and
+		   usually gone three seconds later */
+		time.Sleep(3 * time.Second)
+		data, err = saverGet(client, "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=zh-CN", 1<<20)
+	}
 	if err != nil {
 		log.Printf("submini: screensaver bing list: %v", err)
 		return nil
