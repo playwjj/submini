@@ -68,6 +68,9 @@
               box-shadow: 0 10px 24px rgba(125,211,192,0.28); }
   #loginBtn:active { background: #a7e8d8; }
   #loginMsg { color: #ff6b6b; font-size: 14px; text-align: center; min-height: 20px; margin-top: 12px; }
+  .verTag { font-size: 11px; color: rgba(238,240,244,0.35); }
+  #verTagLogin { text-align: center; margin-top: 10px; }
+  #verTagApp { float: right; line-height: 38px; margin-right: 10px; }
   /* ---------- app frame ---------- */
   #tabs { position: fixed; top: 0; left: 0; right: 0; z-index: 10; height: 56px; overflow: hidden;
           padding: 0 10px; background: rgba(14,16,22,0.82); -webkit-backdrop-filter: saturate(160%) blur(20px); backdrop-filter: saturate(160%) blur(20px);
@@ -184,7 +187,7 @@
   #fullBg .drift { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
                    -webkit-animation: drift 36s ease-in-out infinite alternate; animation: drift 36s ease-in-out infinite alternate;
                    -webkit-animation-play-state: paused; animation-play-state: paused; }
-  body.isPlaying #fullBg .drift { -webkit-animation-play-state: running; animation-play-state: running; }
+  body.drifting #fullBg .drift { -webkit-animation-play-state: running; animation-play-state: running; }
   @-webkit-keyframes drift { from { -webkit-transform: translate3d(0,0,0) scale(1); } to { -webkit-transform: translate3d(6%,-5%,0) scale(1.12); } }
   @keyframes drift { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(6%,-5%,0) scale(1.12); } }
   #fullBg .shade { position: absolute; top: 0; left: 0; right: 0; bottom: 0;
@@ -393,6 +396,7 @@
   <input id="pass" type="password" autocomplete="current-password">
   <button id="loginBtn">连接并保存</button>
   <div id="loginMsg"></div>
+  <div class="verTag" id="verTagLogin"></div>
 </div>
 
 <div id="fullBg">
@@ -408,6 +412,7 @@
     <button id="tabRandom">随机</button>
     <button id="tabSearch">搜索</button>
     <button id="logoutBtn">退出</button>
+    <span class="verTag" id="verTagApp"></span>
   </div>
   <div id="main">
     <div id="searchBar">
@@ -1264,7 +1269,7 @@ function refreshPlayingMarks() {
    while playing, and again when the page is hidden or unloaded. */
 var STATE_KEY = 'submini-state-v1';
 var pendingSeek = 0, lastStateSave = 0;
-function saveState() {
+function saveLocalState() {
   try {
     if (!queue.length || qIndex < 0 || !queue[qIndex]) return;
     var slim = [], i, s;
@@ -1276,6 +1281,33 @@ function saveState() {
       q: slim, i: qIndex, pos: audio.currentTime || 0, t: new Date().getTime()
     }));
   } catch (e) {}
+}
+function saveState() {
+  saveLocalState();
+  syncQueueToServer(false);
+}
+/* The same state is also mirrored to the Subsonic server's own play
+   queue (savePlayQueue), which is what makes restore work across
+   browsers and devices — localStorage is per-browser (on iOS 9 the
+   Safari tab and the home-screen app do not even share it). Server
+   syncs run at most once per 15s; the page going away pushes at
+   once, so the server copy is never more than seconds stale. */
+var serverQueueAt = 0;
+function syncQueueToServer(force) {
+  if (!queue.length || qIndex < 0 || !queue[qIndex]) return;
+  var now = new Date().getTime();
+  if (!force && now - serverQueueAt < 15000) return;
+  serverQueueAt = now;
+  var ids = [], i;
+  for (i = 0; i < queue.length; i++) ids.push(encodeURIComponent(queue[i].id));
+  var url = restUrl('savePlayQueue', {
+    current: queue[qIndex].id,
+    position: Math.round((audio.currentTime || 0) * 1000)
+  }, true);
+  url += '&id=' + ids.join('&id=');
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.send(null);
 }
 function loadState() {
   try {
@@ -1290,16 +1322,14 @@ function loadState() {
 function clearState() {
   try { localStorage.removeItem(STATE_KEY); } catch (e) {}
 }
-function restoreState() {
-  var st = loadState();
-  if (!st) return false;
-  queue = st.q;
-  qIndex = Math.min(st.i || 0, queue.length - 1);
+function applyRestore(songs, idx, pos) {
+  queue = songs;
+  qIndex = Math.min(idx || 0, queue.length - 1);
   if (qIndex < 0) qIndex = 0;
   var song = queue[qIndex];
   nowPlayingId = song.id;
   audio.src = streamUrl(song.id);
-  pendingSeek = st.pos || 0;
+  pendingSeek = pos || 0;
   showSong(song);
   if (song.duration && pendingSeek > 0) {
     var frac = Math.min(pendingSeek / song.duration, 1);
@@ -1312,7 +1342,28 @@ function restoreState() {
   renderQueue();
   refreshPlayingMarks();
   scrollQueueToCurrent();
+}
+function restoreState() {
+  var st = loadState();
+  if (!st) return false;
+  applyRestore(st.q, st.i, st.pos);
   return true;
+}
+/* Restore order on open: the server's play queue first (shared with
+   every other client and browser), then this browser's local state,
+   then a fresh random prefill. */
+function restoreFromServerQueue(done) {
+  api('getPlayQueue', {}, function (root) {
+    var pq = root.playQueue;
+    var entries = pq ? asArray(pq.entry) : [];
+    if (!entries.length) { done(false); return; }
+    var idx = 0, i;
+    for (i = 0; i < entries.length; i++) if (entries[i].id === pq.current) { idx = i; break; }
+    serverQueueAt = new Date().getTime();
+    applyRestore(entries, idx, (pq.position || 0) / 1000);
+    saveLocalState();
+    done(true);
+  }, function () { done(false); }, true);
 }
 audio.addEventListener('loadedmetadata', function () {
   if (pendingSeek > 0) {
@@ -1322,9 +1373,12 @@ audio.addEventListener('loadedmetadata', function () {
 });
 audio.addEventListener('pause', saveState);
 audio.addEventListener('seeked', saveState);
-window.addEventListener('pagehide', saveState, false);
+window.addEventListener('pagehide', function () {
+  saveState();
+  syncQueueToServer(true);
+}, false);
 document.addEventListener('visibilitychange', function () {
-  if (document.hidden) saveState();
+  if (document.hidden) { saveState(); syncQueueToServer(true); }
 }, false);
 function playFromList(songs, idx) {
   queue = songs.slice(0);
@@ -1358,6 +1412,7 @@ function playAt(i) {
   renderQueue();
   scrollQueueToCurrent();
   saveState();
+  pokeDrift();
 }
 function setPlayIcon(playing) {
   $('icoPlay').style.display = playing ? 'none' : 'inline-block';
@@ -1506,6 +1561,15 @@ $('playBtn').onclick = togglePlay;
 $('nextBtn').onclick = function () { next(false); };
 $('prevBtn').onclick = prev;
 /* Walkman transport keys on the machine itself + PLAY lamp / pressed key */
+/* The fullscreen backdrop's slow drift is the most GPU-hungry thing
+   on the A5, so it no longer runs for the whole session: it breathes
+   for ~12s after a track change or a resume, then rests. */
+var driftTimer = null;
+function pokeDrift() {
+  toggleClass(document.body, 'drifting', true);
+  if (driftTimer) clearTimeout(driftTimer);
+  driftTimer = setTimeout(function () { toggleClass(document.body, 'drifting', false); }, 12000);
+}
 function setDeckState(playing) {
   setPlayIcon(playing);
   toggleClass(document.body, 'isPlaying', playing);
@@ -1517,7 +1581,7 @@ function setDeckState(playing) {
     else face.removeAttribute('transform');
   }
 }
-audio.addEventListener('play', function () { setDeckState(true); });
+audio.addEventListener('play', function () { setDeckState(true); pokeDrift(); });
 audio.addEventListener('pause', function () { setDeckState(false); });
 audio.addEventListener('ended', function () { if (audio.paused) setDeckState(false); });
 $('keyPrev').addEventListener('click', prev);
@@ -1665,8 +1729,11 @@ function enterApp() {
   setTab('playlists');
   setFull(true);
   /* a killed home-screen app comes back here: restore the exact
-     queue/track/position if there is saved state, else prefill */
-  if (!restoreState()) loadRandomQueue();
+     queue/track/position — server play queue first, then this
+     browser's local state — else prefill with random songs */
+  restoreFromServerQueue(function (ok) {
+    if (!ok && !restoreState()) loadRandomQueue();
+  });
 }
 $('loginBtn').onclick = function () {
   var server = $('server').value, u = $('user').value, p = $('pass').value;
@@ -1695,6 +1762,22 @@ function postJSON(path, obj, ok, fail) {
   };
   xhr.send(JSON.stringify(obj));
 }
+/* show the running build's version (stamped from the release tag) */
+(function () {
+  var vx = new XMLHttpRequest();
+  vx.open('GET', '/api/version', true);
+  vx.onreadystatechange = function () {
+    if (vx.readyState !== 4 || vx.status !== 200) return;
+    try {
+      var v = JSON.parse(vx.responseText).version;
+      if (v) {
+        setText('verTagLogin', 'submini ' + v);
+        setText('verTagApp', 'submini ' + v);
+      }
+    } catch (e) {}
+  };
+  vx.send(null);
+})();
 /* if the backend already holds a connection, skip the setup form */
 (function () {
   var xhr = new XMLHttpRequest();

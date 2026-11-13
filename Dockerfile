@@ -4,7 +4,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY main.go ./
 COPY web/ ./web/
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /submini .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /submini .
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates \

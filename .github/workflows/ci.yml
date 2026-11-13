@@ -17,5 +17,9 @@ jobs:
         run: test -z "$(gofmt -l .)"
       - name: Vet
         run: go vet ./...
+      - name: Test
+        run: go test ./...
       - name: Build
         run: go build -trimpath -o submini .
+      - name: Page must stay ES5 (iOS 9)
+        run: python3 tools/check_page.py web/mini.html

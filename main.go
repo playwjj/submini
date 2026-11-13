@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
 	"encoding/hex"
@@ -34,6 +35,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -97,11 +99,16 @@ type coverEntry struct {
 	body  []byte
 }
 
+// version is stamped at release time via -ldflags -X main.version
+// (the Dockerfile takes it from the git tag); local builds say "dev".
+var version = "dev"
+
 type coverStore struct {
 	mu    sync.Mutex
 	items map[string]*coverEntry
 	order []string
 	bytes int
+	dir   string // disk layer under DATA_DIR/covers; "" disables it
 }
 
 var covers = &coverStore{items: make(map[string]*coverEntry)}
@@ -140,6 +147,86 @@ func isCoverArt(path string) bool {
 	return strings.HasSuffix(strings.TrimSuffix(path, ".view"), "/getCoverArt")
 }
 
+// The disk layer keeps covers across container restarts and upgrades:
+// files are named by the SHA-256 of the cache key (the full upstream
+// URL), so a lookup needs no index — and no index means nothing to
+// corrupt. Content type is sniffed on read; only genuine covers are
+// ever persisted (the caller decides), so placeholders stay unpinned.
+const coverDiskMaxTotal = 64 << 20
+
+func (c *coverStore) fileFor(key string) string {
+	if c.dir == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(key))
+	return filepath.Join(c.dir, hex.EncodeToString(sum[:])+".img")
+}
+
+func (c *coverStore) diskGet(key string) (*coverEntry, bool) {
+	p := c.fileFor(key)
+	if p == "" {
+		return nil, false
+	}
+	body, err := os.ReadFile(p)
+	if err != nil || len(body) == 0 || len(body) > coverCacheMaxEntry {
+		return nil, false
+	}
+	return &coverEntry{ctype: http.DetectContentType(body), body: body}, true
+}
+
+func (c *coverStore) persist(key string, body []byte) {
+	p := c.fileFor(key)
+	if p == "" {
+		return
+	}
+	tmp := p + ".tmp"
+	if os.WriteFile(tmp, body, 0o644) != nil {
+		return
+	}
+	if os.Rename(tmp, p) != nil {
+		_ = os.Remove(tmp)
+		return
+	}
+	c.trimDisk()
+}
+
+func (c *coverStore) trimDisk() {
+	entries, err := os.ReadDir(c.dir)
+	if err != nil {
+		return
+	}
+	type diskFile struct {
+		path string
+		size int64
+		mod  time.Time
+	}
+	var files []diskFile
+	var total int64
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".img") {
+			continue
+		}
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		total += fi.Size()
+		files = append(files, diskFile{filepath.Join(c.dir, e.Name()), fi.Size(), fi.ModTime()})
+	}
+	if total <= coverDiskMaxTotal {
+		return
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].mod.Before(files[j].mod) })
+	for _, f := range files {
+		if total <= coverDiskMaxTotal {
+			break
+		}
+		if os.Remove(f.path) == nil {
+			total -= f.size
+		}
+	}
+}
+
 // coverTransport caches getCoverArt responses (after the placeholder
 // swap, so the cached bytes are always ones the iPad can decode).
 type coverTransport struct{ base http.RoundTripper }
@@ -150,17 +237,11 @@ func (t coverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	key := req.URL.String()
 	if e, ok := covers.get(key); ok {
-		h := make(http.Header)
-		h.Set("Content-Type", e.ctype)
-		h.Set("Content-Length", fmt.Sprint(len(e.body)))
-		h.Set("Cache-Control", "public, max-age=604800")
-		return &http.Response{
-			Status: "200 OK", StatusCode: http.StatusOK,
-			Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1,
-			Header: h, ContentLength: int64(len(e.body)),
-			Body:    io.NopCloser(bytes.NewReader(e.body)),
-			Request: req,
-		}, nil
+		return serveCachedCover(req, e), nil
+	}
+	if e, ok := covers.diskGet(key); ok {
+		covers.put(key, e) // promote to memory
+		return serveCachedCover(req, e), nil
 	}
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
@@ -188,8 +269,23 @@ func (t coverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		resp.ContentLength = int64(len(body))
 		resp.Header.Set("Cache-Control", "public, max-age=604800")
 		covers.put(key, &coverEntry{ctype: resp.Header.Get("Content-Type"), body: body})
+		covers.persist(key, body)
 	}
 	return resp, nil
+}
+
+func serveCachedCover(req *http.Request, e *coverEntry) *http.Response {
+	h := make(http.Header)
+	h.Set("Content-Type", e.ctype)
+	h.Set("Content-Length", fmt.Sprint(len(e.body)))
+	h.Set("Cache-Control", "public, max-age=604800")
+	return &http.Response{
+		Status: "200 OK", StatusCode: http.StatusOK,
+		Proto: "HTTP/1.1", ProtoMajor: 1, ProtoMinor: 1,
+		Header: h, ContentLength: int64(len(e.body)),
+		Body:    io.NopCloser(bytes.NewReader(e.body)),
+		Request: req,
+	}
 }
 
 func serveIcon(w http.ResponseWriter, r *http.Request, name string) {
@@ -476,6 +572,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("submini: open store: %v", err)
 	}
+	// Cover disk cache lives beside the settings DB; if it cannot be
+	// created, the in-memory cache still works on its own.
+	covers.dir = filepath.Join(dataDir, "covers")
+	if err := os.MkdirAll(covers.dir, 0o755); err != nil {
+		log.Printf("submini: cover disk cache off: %v", err)
+		covers.dir = ""
+	}
 	cfg, err := st.load()
 	if err != nil {
 		log.Fatalf("submini: load settings: %v", err)
@@ -523,6 +626,10 @@ func main() {
 	})
 	mux.HandleFunc("/api/connect", handleConnect)
 	mux.HandleFunc("/api/status", handleStatus)
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, "{\"version\":%q}\n", version)
+	})
 	mux.HandleFunc("/api/disconnect", handleDisconnect)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
