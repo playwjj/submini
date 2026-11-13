@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Submini">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="format-detection" content="telephone=no">
 <meta name="theme-color" content="#0b0d12">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png">
@@ -73,6 +73,14 @@
                background: rgba(120,30,30,0.92); color: #ffe9e9; text-align: center;
                border: 1px solid rgba(255,255,255,0.25); border-radius: 12px;
                padding: 10px 12px; font-size: 14px; }
+  /* home-screen mode: black-translucent status bar — the system
+     glyphs (clock, battery) float over the app's own top 20px instead
+     of a separate black strip, so everything shifts down 20px (.sa is
+     set from JS only when running standalone; Safari is unaffected) */
+  body.sa #tabs { padding-top: 20px; }
+  body.sa #main { padding-top: 76px; }
+  body.sa #player.full { padding-top: 36px; }
+  body.sa #netNotice { top: 84px; }
   #netNotice button { margin-left: 10px; background: rgba(255,255,255,0.16); color: #fff;
                       border: 1px solid rgba(255,255,255,0.35); border-radius: 8px;
                       padding: 4px 12px; font-size: 14px; font-family: inherit; }
@@ -1268,6 +1276,10 @@ function themeFor(song) {
 /* ================= Player ================= */
 var queue = [], qIndex = -1, nowPlayingId = null;
 var audio = $('audio');
+/* Home-screen mode: with the translucent status bar the system
+   glyphs overlay the top 20px of the page; the .sa CSS rules shift
+   the layout down by that much. Set as early as possible. */
+if (window.navigator.standalone) document.body.className += ' sa';
 function markPlayingRow(li, song) {
   if (song.id === nowPlayingId) li.className = li.getAttribute('data-base') + ' playing';
 }
