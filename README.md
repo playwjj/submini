@@ -4,6 +4,16 @@
 
 现代前端框架（Vue/React + ES6）在这台机器的 Safari 上跑不起来，所以这个项目的页面是**手写 ES5 单文件**：没有构建步骤、没有框架、没有外部资源。服务端做三件事：托管这个页面、把 `/rest/*` 反向代理到 Subsonic 服务端（Navidrome 等），让页面与 API 同源绕开老浏览器的 CORS 限制；保存连接配置；并在转发时注入鉴权参数。音频流的 Range 请求由代理原样透传，拖进度条靠它。
 
+## 截图（初代 iPad mini 实机）
+
+全屏播放器（Walkman 磁带机 + 播放队列）：
+
+![全屏播放器](docs/screenshot-player.jpg)
+
+曲库随机页 + 底部迷你播放条：
+
+![曲库与迷你播放条](docs/screenshot-library.jpg)
+
 ## 运行
 
 镜像由 GitHub Actions 在打 `v*` 标签时构建，推送到 Docker Hub（`passport888/submini`）与 GHCR。家里部署只需拉镜像：
