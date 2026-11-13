@@ -14,6 +14,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -25,6 +26,7 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -146,7 +148,7 @@ func runSaverUpdate(dataDir string) {
 	}
 	client := &http.Client{Transport: outboundTransport(), Timeout: 45 * time.Second}
 	var fresh []saverFile
-	fresh = append(fresh, fetchBing(client, dir)...)
+	fresh = append(fresh, fetchBing(dir)...)
 	fresh = append(fresh, fetchMet(client, dir)...)
 	if len(fresh) == 0 {
 		log.Printf("submini: screensaver update found no new pictures, keeping existing set")
@@ -337,34 +339,70 @@ func bingCaption(s string) string {
 	return strings.TrimSpace(s)
 }
 
-func fetchBing(client *http.Client, dir string) []saverFile {
-	data, err := saverGet(client, "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=zh-CN", 1<<20)
-	if err != nil {
-		/* one retry: a bare EOF/reset on this endpoint is common and
-		   usually gone three seconds later */
-		time.Sleep(3 * time.Second)
-		data, err = saverGet(client, "https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=zh-CN", 1<<20)
+// saverClient is the shared outbound client, or — when network is
+// "tcp4" — one whose dialer forces IPv4 (a broken IPv6 path to a CDN
+// often shows up as connects that die mid-stream with EOF).
+func saverClient(network string) *http.Client {
+	tr := outboundTransport()
+	if network != "" {
+		dialer := &net.Dialer{Timeout: 10 * time.Second}
+		tr.DialContext = func(ctx context.Context, _ string, addr string) (net.Conn, error) {
+			return dialer.DialContext(ctx, network, addr)
+		}
 	}
-	if err != nil {
-		log.Printf("submini: screensaver bing list: %v", err)
-		return nil
-	}
-	var br bingResponse
-	if json.Unmarshal(data, &br) != nil {
-		return nil
-	}
-	var out []saverFile
-	for _, im := range br.Images {
-		imgURL := "https://www.bing.com" + im.URL
-		raw, err := saverGet(client, imgURL, 3<<20)
+	return &http.Client{Transport: tr, Timeout: 45 * time.Second}
+}
+
+type bingRoute struct {
+	host    string
+	network string // "" = default routing
+}
+
+// bingRoutes are tried in order until one serves the list; the same
+// route is then used for that batch's images. www.bing.com resets
+// (EOF) from some networks — notably mainland-China home broadband —
+// while the Met stays reachable, so: default route, IPv4-forced, and
+// finally Bing's China domain, which serves the same archive.
+var bingRoutes = []bingRoute{
+	{"www.bing.com", ""},
+	{"www.bing.com", "tcp4"},
+	{"cn.bing.com", ""},
+}
+
+func fetchBing(dir string) []saverFile {
+	const listPath = "/HPImageArchive.aspx?format=js&idx=0&n=8&mkt=zh-CN"
+	var lastErr error
+	for _, rt := range bingRoutes {
+		client := saverClient(rt.network)
+		data, err := saverGet(client, "https://"+rt.host+listPath, 1<<20)
 		if err != nil {
+			lastErr = err
 			continue
 		}
-		if name, ok := storeSaverImage(dir, imgURL, raw); ok {
-			out = append(out, saverFile{File: name, Caption: bingCaption(im.Copyright), Kind: "photo"})
+		var br bingResponse
+		if json.Unmarshal(data, &br) != nil {
+			continue
+		}
+		var out []saverFile
+		for _, im := range br.Images {
+			imgURL := "https://" + rt.host + im.URL
+			raw, err := saverGet(client, imgURL, 3<<20)
+			if err != nil {
+				continue
+			}
+			if name, ok := storeSaverImage(dir, imgURL, raw); ok {
+				out = append(out, saverFile{File: name, Caption: bingCaption(im.Copyright), Kind: "photo"})
+			}
+		}
+		if len(out) > 0 {
+			if rt.host != "www.bing.com" || rt.network != "" {
+				log.Printf("submini: screensaver bing via fallback route %s (%s)", rt.host, rt.network)
+			}
+			return out
 		}
 	}
-	return out
+	log.Printf("submini: screensaver bing unreachable on all routes: %v", lastErr)
+	return nil
 }
 
 type metObject struct {
