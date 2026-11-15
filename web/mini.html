@@ -1672,16 +1672,18 @@ $('netCloseBtn').onclick = function () { showNetNotice(false); };
    local set), so it works at LAN speed and offline. */
 var SAVER_IDLE_MS = 5 * 60 * 1000, SAVER_STEP_MS = 3 * 60 * 1000;
 /* Night hours (device-local): the screensaver is a plain black
-   screen — a bedside iPad should not glow pictures at 3am. Fixed
-   constants on purpose: a personal appliance does not need a
-   settings surface for a once-ever choice. */
-var SAVER_NIGHT_FROM = 0, SAVER_NIGHT_TO = 6;
+   screen — a bedside iPad should not glow pictures late at night.
+   Fixed constants on purpose: a personal appliance does not need a
+   settings surface for a once-ever choice. Minutes of day, and the
+   window crosses midnight: 22:00 to 06:30. */
+var SAVER_NIGHT_FROM = 22 * 60, SAVER_NIGHT_TO = 6 * 60 + 30;
 var lastTouchAt = new Date().getTime(), saverOn = false;
 var saverList = [], saverIdx = 0, saverTimer = null, saverFront = 0, saverErrs = 0;
 var saverMode = 'pic'; // 'pic' | 'black'
 function saverNightActive() {
-  var h = new Date().getHours();
-  return h >= SAVER_NIGHT_FROM && h < SAVER_NIGHT_TO;
+  var d = new Date();
+  var m = d.getHours() * 60 + d.getMinutes();
+  return m >= SAVER_NIGHT_FROM || m < SAVER_NIGHT_TO;
 }
 var saverGuardUntil = 0;
 function noteTouch(e) {
