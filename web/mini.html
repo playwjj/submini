@@ -1671,12 +1671,30 @@ function saverNightActive() {
   var h = new Date().getHours();
   return h >= SAVER_NIGHT_FROM && h < SAVER_NIGHT_TO;
 }
-function noteTouch() {
+var saverGuardUntil = 0;
+function noteTouch(e) {
   lastTouchAt = new Date().getTime();
-  if (saverOn) stopSaver();
+  if (saverOn) {
+    stopSaver();
+    /* The dismissing tap must not fall through to the music UI
+       below: hiding the overlay at touchstart leaves the tap's
+       click free to land on whatever shows up underneath, so
+       swallow the rest of this gesture and guard clicks briefly. */
+    saverGuardUntil = lastTouchAt + 500;
+    if (e) {
+      if (e.preventDefault) e.preventDefault();
+      if (e.stopPropagation) e.stopPropagation();
+    }
+  }
 }
 document.addEventListener('touchstart', noteTouch, true);
 document.addEventListener('mousedown', noteTouch, true);
+document.addEventListener('click', function (e) {
+  if (new Date().getTime() < saverGuardUntil) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
 audio.addEventListener('play', function () { if (saverOn) stopSaver(); });
 setInterval(function () {
   if (saverOn || !window.navigator.standalone) return;
