@@ -26,6 +26,7 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -146,6 +147,7 @@ func runSaverUpdate(dataDir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
+	pruneSaverIndex(dir)
 	client := &http.Client{Transport: outboundTransport(), Timeout: 45 * time.Second}
 	var fresh []saverFile
 	fresh = append(fresh, fetchBing(dir)...)
@@ -172,6 +174,40 @@ func runSaverUpdate(dataDir string) {
 		}
 	}
 	log.Printf("submini: screensaver updated, %d new pictures (set now %d)", len(fresh), len(items))
+}
+
+// pruneSaverIndex drops already-downloaded pictures that fail the
+// colour gate (they predate it, or a source changed its tune), so an
+// upgrade cleans the sitting set at the next update run instead of
+// waiting for the rotation to replace them one by one.
+func pruneSaverIndex(dir string) {
+	items := readSaverIndex(dir)
+	if len(items) == 0 {
+		return
+	}
+	kept := make([]saverFile, 0, len(items))
+	dropped := 0
+	for _, it := range items {
+		p := filepath.Join(dir, it.File)
+		data, err := os.ReadFile(p)
+		if err == nil {
+			if img, _, derr := image.Decode(bytes.NewReader(data)); derr == nil && !saverColorOK(img) {
+				_ = os.Remove(p)
+				dropped++
+				continue
+			}
+		}
+		kept = append(kept, it)
+	}
+	if dropped == 0 {
+		return
+	}
+	idx, _ := json.Marshal(map[string]interface{}{"images": kept})
+	tmp := filepath.Join(dir, "index.json.tmp")
+	if os.WriteFile(tmp, idx, 0o644) == nil {
+		_ = os.Rename(tmp, filepath.Join(dir, "index.json"))
+	}
+	log.Printf("submini: screensaver pruned %d monochrome/single-hue pictures", dropped)
 }
 
 func readSaverIndex(dir string) []saverFile {
@@ -228,9 +264,84 @@ func saverGet(client *http.Client, rawurl string, maxBytes int64) ([]byte, error
 	return io.ReadAll(io.LimitReader(resp.Body, maxBytes))
 }
 
+// Colour gate for screensaver pictures. The Met's print holdings
+// include zincographs and lithographs in black ink on tinted (often
+// yellow) paper, plus near-monochrome etchings — flat single-hue or
+// colourless images that look harsh on the idle screen. A painting or
+// a photo spreads its colours across several hues, so the gate looks
+// at the hue distribution of the saturated pixels: measured on the
+// bundled starters, the most single-hued one (Turner's golden
+// Temeraire) puts 0.83 of its chromatic pixels into one 30° hue band,
+// while a yellow-paper zincograph puts 0.996. The limits sit between.
+// Two sampling choices keep the census honest: the picture is first
+// shrunk to 320 px wide, and pixels darker than 15% value are left
+// out — at full size in the dark, JPEG ringing along hard ink edges
+// invents thousands of stray-hue shade pixels (a synthetic duotone
+// scores 0.90 counted naively, 0.99 counted this way).
+const (
+	saverMinChromaFrac = 0.05 // below this the picture is effectively monochrome
+	saverMaxHueShare   = 0.92 // one hue band holding more than this = single-hue
+)
+
+func saverColorOK(img image.Image) bool {
+	img = downscale(img, 320)
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if w == 0 || h == 0 {
+		return false
+	}
+	step := int(math.Sqrt(float64(w*h) / 30000))
+	if step < 1 {
+		step = 1
+	}
+	var total, chrom int
+	var bins [12]int
+	for y := b.Min.Y; y < b.Max.Y; y += step {
+		for x := b.Min.X; x < b.Max.X; x += step {
+			r16, g16, b16, _ := img.At(x, y).RGBA()
+			r, g, bl := float64(r16)/65535, float64(g16)/65535, float64(b16)/65535
+			mx := math.Max(r, math.Max(g, bl))
+			mn := math.Min(r, math.Min(g, bl))
+			total++
+			if mx <= 0.15 || mx >= 0.98 || mx == mn {
+				continue
+			}
+			if (mx-mn)/mx < 0.18 {
+				continue
+			}
+			chrom++
+			var hue float64
+			switch mx {
+			case r:
+				hue = math.Mod((g-bl)/(mx-mn), 6)
+			case g:
+				hue = (bl-r)/(mx-mn) + 2
+			default:
+				hue = (r-g)/(mx-mn) + 4
+			}
+			hue *= 60
+			if hue < 0 {
+				hue += 360
+			}
+			bins[int(hue/30)%12]++
+		}
+	}
+	if total == 0 || float64(chrom)/float64(total) < saverMinChromaFrac {
+		return false
+	}
+	top := 0
+	for _, n := range bins {
+		if n > top {
+			top = n
+		}
+	}
+	return float64(top)/float64(chrom) < saverMaxHueShare
+}
+
 // storeSaverImage validates a downloaded picture (decodable, landscape,
-// wide enough), downscales it to at most 1024 px wide, saves it as a
-// JPEG named after its source URL, and returns the file name.
+// wide enough, colourful enough), downscales it to at most 1024 px
+// wide, saves it as a JPEG named after its source URL, and returns the
+// file name.
 func storeSaverImage(dir, rawurl string, data []byte) (string, bool) {
 	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || (format != "jpeg" && format != "png") {
@@ -239,11 +350,15 @@ func storeSaverImage(dir, rawurl string, data []byte) (string, bool) {
 	if cfg.Width < 700 || cfg.Width <= int(float64(cfg.Height)*1.1) {
 		return "", false
 	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return "", false
+	}
+	if !saverColorOK(img) {
+		log.Printf("submini: screensaver skipped a monochrome/single-hue picture: %s", rawurl)
+		return "", false
+	}
 	if cfg.Width > 1024 || format != "jpeg" {
-		img, _, err := image.Decode(bytes.NewReader(data))
-		if err != nil {
-			return "", false
-		}
 		img = downscale(img, 1024)
 		var buf bytes.Buffer
 		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 82}); err != nil {
