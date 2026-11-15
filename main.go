@@ -35,7 +35,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -190,42 +189,7 @@ func (c *coverStore) persist(key string, body []byte) {
 	c.trimDisk()
 }
 
-func (c *coverStore) trimDisk() {
-	entries, err := os.ReadDir(c.dir)
-	if err != nil {
-		return
-	}
-	type diskFile struct {
-		path string
-		size int64
-		mod  time.Time
-	}
-	var files []diskFile
-	var total int64
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".img") {
-			continue
-		}
-		fi, err := e.Info()
-		if err != nil {
-			continue
-		}
-		total += fi.Size()
-		files = append(files, diskFile{filepath.Join(c.dir, e.Name()), fi.Size(), fi.ModTime()})
-	}
-	if total <= coverDiskMaxTotal {
-		return
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].mod.Before(files[j].mod) })
-	for _, f := range files {
-		if total <= coverDiskMaxTotal {
-			break
-		}
-		if os.Remove(f.path) == nil {
-			total -= f.size
-		}
-	}
-}
+func (c *coverStore) trimDisk() { trimDir(c.dir, ".img", coverDiskMaxTotal) }
 
 // coverTransport caches getCoverArt responses (after the placeholder
 // swap, so the cached bytes are always ones the iPad can decode).
@@ -579,6 +543,11 @@ func main() {
 		log.Printf("submini: cover disk cache off: %v", err)
 		covers.dir = ""
 	}
+	rhythms.dir = filepath.Join(dataDir, "rhythm")
+	if err := os.MkdirAll(rhythms.dir, 0o755); err != nil {
+		log.Printf("submini: rhythm disk cache off: %v", err)
+		rhythms.dir = ""
+	}
 	cfg, err := st.load()
 	if err != nil {
 		log.Fatalf("submini: load settings: %v", err)
@@ -628,6 +597,7 @@ func main() {
 	mux.HandleFunc("/api/status", handleStatus)
 	mux.HandleFunc("/api/screensaver", handleAPIScreensaver(dataDir))
 	mux.HandleFunc("/screensaver/", handleSaverFile(dataDir))
+	mux.HandleFunc("/api/rhythm", handleAPIRhythm)
 	startSaverUpdater(dataDir)
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

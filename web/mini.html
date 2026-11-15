@@ -101,6 +101,16 @@
   #svCap { position: absolute; left: 18px; bottom: 14px; z-index: 2;
            color: rgba(255,255,255,0.85); font-size: 14px;
            text-shadow: 0 1px 6px rgba(0,0,0,0.85); }
+  /* playing-state screensaver: a hi-fi cassette deck drawn on two
+     canvases — the static panel (brushed metal, neon glows: painted
+     once per song, never per frame) under a
+     dynamic layer where only the moving parts are redrawn, so the A5
+     never repaints the whole screen per frame */
+  #viz { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 40; background: #05060a; overflow: hidden; }
+  #vzBg, #vzGlow, #vzDim, #vzStage { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+  #vzGlow { opacity: 0.3; -webkit-transform: translateZ(0); transform: translateZ(0); }
+  #vzDim { background: #000; opacity: 0; -webkit-transition: opacity 3s; transition: opacity 3s; }
+  #vzPanel, #vzCanvas { position: absolute; top: 0; left: 0; }
   #verTagLogin { text-align: center; margin-top: 10px; }
   #verTagApp { float: right; line-height: 38px; margin-right: 10px; }
   /* ---------- app frame ---------- */
@@ -417,6 +427,7 @@
 <div id="aurora"></div>
 <div id="netNotice" style="display:none"><span>连不上音乐服务器，播放已停止</span><button id="netRetryBtn">重试</button><button id="netCloseBtn">×</button></div>
 <div id="saver" style="display:none"><div class="svLay" id="svA"></div><div class="svLay" id="svB"></div><div id="svCap"></div></div>
+<div id="viz" style="display:none"><div id="vzBg"></div><div id="vzGlow"></div><div id="vzStage"><canvas id="vzPanel"></canvas><canvas id="vzCanvas"></canvas></div><div id="vzDim"></div></div>
 
 <div id="loginView">
   <img class="logo" src="/icons/apple-touch-icon-180.png" alt="">
@@ -1164,7 +1175,7 @@ function doSearch() {
 /* The cover goes through the same-origin /rest proxy, so the canvas is
    not tainted and getImageData works (also on iOS 9). */
 var DEFAULT_THEME = { a: [32, 120, 112], b: [86, 52, 150], v: [125, 211, 192] };
-var bgFront = 'bgA', themeKey = null;
+var bgFront = 'bgA', themeKey = null, vizTheme = null;
 function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
   var mx = Math.max(r, g, b), mn = Math.min(r, g, b), h = 0, s = 0, l = (mx + mn) / 2, d = mx - mn;
@@ -1255,6 +1266,7 @@ function applyTheme(t) {
      bright pastel; grey-ish covers keep the mint default */
   var acc = (t.vs === undefined || t.vs > 0.18) ? tune(t.v, 0.45, 0.75, 0.66, 0.74) : [125, 211, 192];
   var accCss = 'rgb(' + acc[0] + ',' + acc[1] + ',' + acc[2] + ')';
+  vizTheme = { a: a, b: b, v: v, dark: dark, acc: acc };
   $('playBtn').style.background = accCss;
   $('playBtn').style.boxShadow = '0 6px 18px ' + rgba(acc, 0.35);
   $('progFill').style.background = accCss;
@@ -1695,12 +1707,36 @@ document.addEventListener('click', function (e) {
     e.stopPropagation();
   }
 }, true);
-audio.addEventListener('play', function () { if (saverOn) stopSaver(); });
+/* Playback starting under the picture saver (lock-screen controls,
+   headphones) means music with nobody touching: hand over to the
+   visualiser rather than waking the screen. */
+audio.addEventListener('play', function () {
+  if (saverOn && saverMode !== 'viz') { saverOff(); startViz(); }
+});
+/* Savers run in the home-screen app; #saver in the URL also enables
+   them in a browser tab, for trying them out on a desktop. */
+function saverAllowed() {
+  return window.navigator.standalone || window.location.hash === '#saver';
+}
 setInterval(function () {
-  if (saverOn || !window.navigator.standalone) return;
+  if (!saverAllowed()) return;
   if ($('appView').style.display === 'none') return;
-  if (!audio.paused) return;
-  if (new Date().getTime() - lastTouchAt >= SAVER_IDLE_MS) startSaver();
+  var now = new Date().getTime(), idle = now - lastTouchAt;
+  if (saverOn) {
+    /* music stopped under the visualiser (queue ran out, paused
+       remotely): after a grace period fall back to the pictures */
+    if (saverMode === 'viz' && audio.paused && vizPausedAt && now - vizPausedAt >= VIZ_PAUSE_MS) {
+      saverOff();
+      startSaver();
+    }
+    return;
+  }
+  if (!audio.paused) {
+    if (idle >= VIZ_IDLE_MS) startViz();
+    else if (idle >= VIZ_PREFETCH_MS && nowPlayingId) rhyFetch(nowPlayingId);
+  } else if (idle >= SAVER_IDLE_MS) {
+    startSaver();
+  }
 }, 15000);
 /* Weave photos and paintings together proportionally, so the
    rotation never runs a long single-theme stretch: at each step the
@@ -1800,11 +1836,744 @@ function saverShow(i) {
   };
   img.src = item.src;
 }
-function stopSaver() {
+function saverOff() {
   saverOn = false;
   if (saverTimer) { clearInterval(saverTimer); saverTimer = null; }
   $('saver').style.display = 'none';
+  vizHide();
+}
+function stopSaver() {
+  saverOff();
   lastTouchAt = new Date().getTime();
+}
+
+/* ---- Playing-state screensaver: a visualiser that follows the music.
+   After 3 idle minutes with music playing a hi-fi cassette deck takes
+   the screen: the tape turns, two VU needles swing, an LED spectrum
+   dances and the PEAK light flashes on the beats. The iPad
+   does not analyse audio itself (routing <audio> through Web Audio on
+   iOS 9 breaks background playback); the server pre-computes each
+   song's envelope at /api/rhythm and the page plays it back against
+   audio.currentTime. Until that arrives (or if it fails) the meters just
+   breathes gently. */
+var VIZ_IDLE_MS = 3 * 60 * 1000, VIZ_PREFETCH_MS = 60 * 1000, VIZ_PAUSE_MS = 10 * 1000;
+var VIZ_FRAME_MS = 40; // ~25fps: plenty for meters, light on the A5
+var vizRaf = null, vizLast = 0, vizSongId = null, vizThemeRef = null, vizPausedAt = 0;
+var vizW = 0, vizH = 0, vizS = 1, vizOx = 0, vizOy = 0, vizL = null, vizPc = null, vizDc = null;
+var vizLvl = [], vizTgt = [], vizEnergy = 0, vizBeat = 0, vizLastFrame = -1;
+var vizAngL = 0, vizAngR = 0, vizNeedles = [{ p: 0, v: 0 }, { p: 0, v: 0 }];
+var vizPeak = [], vizPeakHold = [], vizLeds = [], vizClockText = '';
+var vizGlowOp = -1, vizNightAt = 0;
+var vizCounterSec = -1, vizClockDrawn = '', vizGl = null, vizTitleFit = '', vizGlitch = 0, vizGlitchShown = false;
+var vizTick = null, vizTickOff = 0, vizSweep = 0;
+var VFD = '#7ff8ff';
+/* analyser rows shade from cyan through purple to magenta, bottom to top */
+var SPEC_ON = [], SPEC_OFF = [];
+(function () {
+  var a = [25, 246, 255], m = [150, 80, 255], b = [255, 43, 214], j, k, f, c0, c1, col;
+  for (j = 0; j < 14; j++) {
+    f = j / 13;
+    if (f < 0.55) { c0 = a; c1 = m; f = f / 0.55; } else { c0 = m; c1 = b; f = (f - 0.55) / 0.45; }
+    col = [];
+    for (k = 0; k < 3; k++) col.push(Math.round(c0[k] + (c1[k] - c0[k]) * f));
+    SPEC_ON.push('rgb(' + col.join(',') + ')');
+    SPEC_OFF.push('rgba(' + col.join(',') + ',0.09)');
+  }
+})();
+var VU_DB = [-20, -10, -7, -5, -3, -2, -1, 0, 1, 2, 3];
+var VZ_FONT = '-apple-system, "PingFang SC", "Helvetica Neue", sans-serif';
+var VZ_MONO = 'Menlo, "Courier New", monospace';
+/* Deck layouts in deck units ([x, y, w, h] boxes), scaled to the screen. */
+var VIZ_LAYOUTS = {
+  land: { w: 900, h: 640, bay: [40, 76, 420, 272], vfd: [490, 76, 370, 120],
+          vu: [[490, 216, 180, 132], [680, 216, 180, 132]], spec: [40, 372, 820, 212], leds: 614 },
+  port: { w: 640, h: 900, bay: [60, 76, 520, 300], vfd: [40, 396, 560, 116],
+          vu: [[40, 532, 272, 138], [328, 532, 272, 138]], spec: [40, 704, 560, 154], leds: 880 }
+};
+var rhyCache = {}, rhyOrder = [], rhyPending = {};
+function rhyFetch(id) {
+  if (!id || rhyCache[id] || rhyPending[id]) return;
+  rhyPending[id] = true;
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/rhythm?id=' + encodeURIComponent(id), true);
+  xhr.timeout = 180000;
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState !== 4) return;
+    delete rhyPending[id];
+    if (xhr.status !== 200) return;
+    var r = null, bin, arr, i;
+    try {
+      r = JSON.parse(xhr.responseText);
+      bin = window.atob(r.data);
+      arr = new Uint8Array(bin.length);
+      for (i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    } catch (e) { return; }
+    if (!r.n || !r.stride || arr.length < r.n * r.stride) return;
+    rhyCache[id] = { fps: r.fps, bands: r.bands, stride: r.stride, n: r.n, d: arr };
+    rhyOrder.push(id);
+    while (rhyOrder.length > 6) delete rhyCache[rhyOrder.shift()];
+  };
+  xhr.send(null);
+}
+function vzRR(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.lineTo(x + w - r, y); c.arcTo(x + w, y, x + w, y + r, r);
+  c.lineTo(x + w, y + h - r); c.arcTo(x + w, y + h, x + w - r, y + h, r);
+  c.lineTo(x + r, y + h); c.arcTo(x, y + h, x, y + h - r, r);
+  c.lineTo(x, y + r); c.arcTo(x, y, x + r, y, r);
+  c.closePath();
+}
+function vzDot(c, x, y, r) { c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2, false); c.fill(); }
+function vzFont(c, px, bold, mono) { c.font = (bold ? 'bold ' : '') + px + 'px ' + (mono ? VZ_MONO : VZ_FONT); }
+function vzFit(c, s, maxW) {
+  if (c.measureText(s).width <= maxW) return s;
+  while (s.length > 1 && c.measureText(s + '…').width > maxW) s = s.substring(0, s.length - 1);
+  return s + '…';
+}
+function vzPad2(n) { return (n < 10 ? '0' : '') + n; }
+function vizLayout() {
+  vizW = window.innerWidth;
+  vizH = window.innerHeight;
+  var cs = [$('vzPanel'), $('vzCanvas')], i;
+  for (i = 0; i < 2; i++) {
+    cs[i].width = vizW; cs[i].height = vizH;
+    cs[i].style.width = vizW + 'px'; cs[i].style.height = vizH + 'px';
+  }
+  vizPc = cs[0].getContext('2d');
+  vizDc = cs[1].getContext('2d');
+  vizL = vizW >= vizH ? VIZ_LAYOUTS.land : VIZ_LAYOUTS.port;
+  vizS = Math.min(vizW * 0.93 / vizL.w, vizH * 0.9 / vizL.h);
+  vizOx = Math.round((vizW - vizL.w * vizS) / 2);
+  vizOy = Math.round((vizH - vizL.h * vizS) / 2);
+  vizDc.setTransform(vizS, 0, 0, vizS, vizOx, vizOy);
+  vizThemeRef = null;
+  vizDrawPanel();
+}
+function vizApplyTheme() {
+  vizThemeRef = vizTheme;
+  var t = vizTheme || { a: [32, 120, 112], b: [40, 30, 80], v: [125, 211, 192], dark: [10, 10, 18], acc: [125, 211, 192] };
+  /* the cover colour only tints the night sky behind the deck; the deck
+     itself keeps its fixed neon so it reads as one machine */
+  $('vzBg').style.background =
+    'radial-gradient(ellipse at 50% 38%, ' + rgba(t.a, 0.38) + ' 0%, ' + rgba(t.a, 0) + ' 60%), ' +
+    'linear-gradient(180deg, ' + rgba(t.dark, 1) + ' 0%, #0a0518 52%, #22073a 100%)';
+  var reach = Math.round(Math.max(vizL.w, vizL.h) * vizS * 0.75);
+  $('vzGlow').style.background =
+    'radial-gradient(circle at ' + Math.round(vizW / 2) + 'px ' + Math.round(vizH * 0.62) + 'px, ' +
+    'rgba(255,43,214,0.6) 0px, rgba(120,60,255,0.22) ' + Math.round(reach * 0.6) + 'px, rgba(25,246,255,0) ' + reach + 'px)';
+}
+/* ---- metal and neon primitives (static layer only: gradients, the
+   brushed grain and every shadowBlur glow are painted once, never per
+   frame) ---- */
+/* chamfered box: corners TL/BR cut by a, TR/BL by b */
+function vzCut(c, x, y, w, h, a, b) {
+  c.beginPath();
+  c.moveTo(x + a, y); c.lineTo(x + w - b, y); c.lineTo(x + w, y + b);
+  c.lineTo(x + w, y + h - a); c.lineTo(x + w - a, y + h);
+  c.lineTo(x + b, y + h); c.lineTo(x, y + h - b); c.lineTo(x, y + a);
+  c.closePath();
+}
+var vzSeed = 1;
+function vzRnd() { vzSeed = (vzSeed * 9301 + 49297) % 233280; return vzSeed / 233280; }
+/* brushed gunmetal inside the current path */
+function vzBrushed(c, x, y, w, h, stops, seed) {
+  var g = c.createLinearGradient(x, y, x + w * 0.4, y + h), i, r;
+  for (i = 0; i < stops.length; i++) g.addColorStop(stops[i][0], stops[i][1]);
+  c.fillStyle = g; c.fill();
+  c.save(); c.clip();
+  vzSeed = seed || 7;
+  for (i = y; i < y + h; i += 1.5) {
+    r = vzRnd();
+    c.fillStyle = r < 0.5 ? 'rgba(255,255,255,' + (r * 0.1).toFixed(3) + ')' : 'rgba(0,0,0,' + ((r - 0.5) * 0.18).toFixed(3) + ')';
+    c.fillRect(x + (vzRnd() - 0.5) * w * 0.3, i, w * (0.5 + vzRnd() * 0.8), 1);
+  }
+  /* anisotropic sheen: two soft vertical light bands, like a lamp
+     reflected in machined steel */
+  var hb = c.createLinearGradient(x, 0, x + w, 0);
+  hb.addColorStop(0, 'rgba(255,255,255,0)');
+  hb.addColorStop(0.24, 'rgba(255,255,255,0.13)');
+  hb.addColorStop(0.36, 'rgba(255,255,255,0)');
+  hb.addColorStop(0.68, 'rgba(255,255,255,0.07)');
+  hb.addColorStop(0.76, 'rgba(255,255,255,0)');
+  hb.addColorStop(1, 'rgba(255,255,255,0.04)');
+  c.fillStyle = hb; c.fillRect(x, y, w, h);
+  c.restore();
+}
+/* bevel on the current path: raised = lit from above */
+function vzBevel(c, y, h, raised, lw) {
+  var g = c.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, raised ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.85)');
+  g.addColorStop(0.5, raised ? 'rgba(160,165,175,0.15)' : 'rgba(0,0,0,0.3)');
+  g.addColorStop(1, raised ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.4)');
+  c.strokeStyle = g; c.lineWidth = lw; c.stroke();
+}
+function vzGlow(c, color, blur) { c.shadowColor = color; c.shadowBlur = blur * vizS; c.shadowOffsetX = 0; c.shadowOffsetY = 0; }
+function vzNoGlow(c) { c.shadowColor = 'rgba(0,0,0,0)'; c.shadowBlur = 0; c.shadowOffsetX = 0; c.shadowOffsetY = 0; }
+function vzLine(c, pts) {
+  c.beginPath(); c.moveTo(pts[0], pts[1]);
+  for (var i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]);
+  c.stroke();
+}
+/* hex socket screw */
+function vzScrew(c, x, y, r, ang) {
+  var g = c.createRadialGradient(x - r * 0.4, y - r * 0.4, 0, x, y, r), i;
+  g.addColorStop(0, '#f2f5f8'); g.addColorStop(0.55, '#8b919b'); g.addColorStop(1, '#3a3e46');
+  c.fillStyle = '#0c0d10'; vzDot(c, x, y + 0.6, r + 1.2);
+  c.fillStyle = g; vzDot(c, x, y, r);
+  c.fillStyle = '#16181d';
+  c.beginPath();
+  for (i = 0; i < 6; i++) {
+    var a = ang + i * Math.PI / 3;
+    if (i) c.lineTo(x + Math.cos(a) * r * 0.45, y + Math.sin(a) * r * 0.45);
+    else c.moveTo(x + Math.cos(a) * r * 0.45, y + Math.sin(a) * r * 0.45);
+  }
+  c.closePath(); c.fill();
+}
+/* text stamped into the metal: dark cut with a lit lower lip */
+function vzEngrave(c, s, x, y, light) {
+  c.fillStyle = 'rgba(255,255,255,' + (light || 0.22) + ')'; c.fillText(s, x, y + 1);
+  c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillText(s, x, y);
+}
+/* a machined pocket with neon corner brackets and a stamped label */
+function vzWell(c, r, a, b, label, inner) {
+  vzCut(c, r[0] - 5, r[1] - 5, r[2] + 10, r[3] + 10, a + 3, b + 2);
+  c.fillStyle = '#16181d'; c.fill();
+  vzBevel(c, r[1] - 5, r[3] + 10, false, 2.5);
+  vzCut(c, r[0], r[1], r[2], r[3], a, b);
+  c.fillStyle = inner || '#04050a'; c.fill();
+  c.strokeStyle = 'rgba(0,0,0,0.9)'; c.lineWidth = 1.5; c.stroke();
+  var x0 = r[0] - 2, y0 = r[1] - 2, x1 = r[0] + r[2] + 2, y1 = r[1] + r[3] + 2, k = 16;
+  vzGlow(c, '#19f6ff', 8);
+  c.strokeStyle = '#7ff8ff'; c.lineWidth = 1.6;
+  vzLine(c, [x0, y0 + a + k, x0, y0 + a, x0 + a, y0, x0 + a + k, y0]);
+  c.strokeStyle = '#ff5ae0';
+  vzLine(c, [x1, y1 - a - k, x1, y1 - a, x1 - a, y1, x1 - a - k, y1]);
+  vzNoGlow(c);
+  if (label) {
+    vzFont(c, 8, true, true); c.textAlign = 'left';
+    vzEngrave(c, label, r[0] + a + 4, r[1] - 9, 0.18);
+    c.fillStyle = '#ff2bd6'; c.fillRect(r[0] + a - 4, r[1] - 15, 4, 6);
+  }
+}
+function vzHazard(c, x, y, w, h) {
+  c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+  c.fillStyle = '#e8d83a'; c.fillRect(x, y, w, h);
+  c.fillStyle = '#121214';
+  for (var i = -h; i < w; i += 10) {
+    c.beginPath(); c.moveTo(x + i, y + h); c.lineTo(x + i + 5, y + h); c.lineTo(x + i + 5 + h, y); c.lineTo(x + i + h, y); c.closePath(); c.fill();
+  }
+  c.restore();
+  c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 1; c.strokeRect(x, y, w, h);
+}
+/* ---- static panel: painted on song change, clock minute and layout ---- */
+function vizDrawPanel() {
+  var c = vizPc, L = vizL, W = L.w, H = L.h, i;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, vizW, vizH);
+  c.setTransform(vizS, 0, 0, vizS, vizOx, vizOy);
+  vizDrawFloor(c);
+  c.setTransform(vizS, 0, 0, vizS, vizOx, vizOy);
+  c.textBaseline = 'alphabetic';
+  /* neon rim light spilling round the chassis, then the chassis on top */
+  vzCut(c, -2, -2, W + 4, H + 4, 42, 18);
+  vzGlow(c, '#ff2bd6', 28); c.strokeStyle = 'rgba(255,43,214,0.9)'; c.lineWidth = 3; c.stroke();
+  vzGlow(c, 'rgba(0,0,0,0.8)', 30); c.shadowOffsetY = 14 * vizS;
+  vzCut(c, 0, 0, W, H, 40, 16); c.fillStyle = '#25282e'; c.fill();
+  vzNoGlow(c);
+  vzCut(c, 0, 0, W, H, 40, 16);
+  vzBrushed(c, 0, 0, W, H, [[0, '#a3a9b3'], [0.18, '#4f545d'], [0.44, '#848a94'], [0.68, '#363940'], [1, '#202227']], 11);
+  vzCut(c, 1.5, 1.5, W - 3, H - 3, 39, 15); vzBevel(c, 0, H, true, 3);
+  /* machined groove a little inside the edge */
+  vzCut(c, 11, 11, W - 22, H - 22, 34, 12);
+  c.strokeStyle = 'rgba(0,0,0,0.55)'; c.lineWidth = 1.2; c.stroke();
+  vzCut(c, 11, 12.2, W - 22, H - 22, 34, 12);
+  c.strokeStyle = 'rgba(255,255,255,0.1)'; c.lineWidth = 1; c.stroke();
+  /* neon tubes laid into the groove */
+  vzGlow(c, '#19f6ff', 12); c.strokeStyle = '#8ffbff'; c.lineWidth = 2;
+  vzLine(c, [11, 11 + 34 + 60, 11, 11 + 34, 11 + 34, 11, 11 + 34 + 120, 11]);
+  vzGlow(c, '#ff2bd6', 12); c.strokeStyle = '#ff7ae6';
+  vzLine(c, [W - 11, H - 11 - 34 - 60, W - 11, H - 11 - 34, W - 11 - 34, H - 11, W - 11 - 34 - 120, H - 11]);
+  vzNoGlow(c);
+  /* header */
+  vzFont(c, 24, true); c.textAlign = 'left';
+  c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillText('SUBMINI', 41, 52);
+  var tg = c.createLinearGradient(0, 30, 0, 52);
+  tg.addColorStop(0, '#ffffff'); tg.addColorStop(0.5, '#c9ced6'); tg.addColorStop(0.55, '#8c929c'); tg.addColorStop(1, '#e3e7ec');
+  c.fillStyle = tg; c.fillText('SUBMINI', 40, 51);
+  var bw = c.measureText('SUBMINI').width;
+  vzFont(c, 10, true, true);
+  vzGlow(c, '#19f6ff', 6); c.fillStyle = '#7ff8ff';
+  c.fillText('// NEURAL CASSETTE DECK', 52 + bw, 50);
+  vzNoGlow(c);
+  var titleEnd = 52 + bw + c.measureText('// NEURAL CASSETTE DECK').width;
+  c.textAlign = 'right'; vzFont(c, 9, true, true);
+  vzEngrave(c, 'SM-2077 · 2HEAD · AUTO REV', W - 46, 50, 0.25);
+  var rtW = c.measureText('SM-2077 · 2HEAD · AUTO REV').width;
+  var hzX = W - 46 - rtW - 76;
+  vzHazard(c, hzX, 41, 60, 10);
+  /* cooling slots between the badge and the hazard plate */
+  var vx0 = titleEnd + 26, vx1 = hzX - 22, n = Math.floor((vx1 - vx0) / 11);
+  if (n >= 5) {
+    for (i = 0; i < n; i++) {
+      vzRR(c, vx0 + i * 11, 34, 5, 18, 2.5);
+      c.fillStyle = '#07080b'; c.fill();
+      vzBevel(c, 34, 18, false, 1.2);
+    }
+  }
+  vzScrew(c, 22, 64, 5.5, 0.3); vzScrew(c, W - 22, 64, 5.5, 1.1);
+  vzScrew(c, 22, H - 64, 5.5, 0.8); vzScrew(c, W - 22, H - 64, 5.5, 0.1);
+  vizDrawBay(c);
+  vizDrawVfd(c);
+  vizDrawVuFace(c, L.vu[0], 'L');
+  vizDrawVuFace(c, L.vu[1], 'R');
+  vizDrawSpecBase(c);
+  vizDrawLedRow(c);
+  vizCounterSec = -1; vizClockDrawn = ''; vizGlitchShown = false;
+}
+/* synthwave floor behind the deck, in screen pixels: it only peeks out
+   round the chassis, and costs nothing per frame since it lives on the
+   static layer */
+function vizDrawFloor(c) {
+  var hy = Math.round(vizH * 0.58), cx = vizW / 2, i, z, y;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  var g = c.createLinearGradient(0, hy - 40, 0, hy + 4);
+  g.addColorStop(0, 'rgba(255,43,214,0)'); g.addColorStop(1, 'rgba(255,43,214,0.28)');
+  c.fillStyle = g; c.fillRect(0, hy - 40, vizW, 44);
+  c.strokeStyle = 'rgba(255,43,214,0.35)'; c.lineWidth = 1;
+  for (i = 1; i < 14; i++) {
+    z = i * i * 0.012; y = hy + (vizH - hy) * Math.min(1, z * 1.6);
+    c.beginPath(); c.moveTo(0, Math.round(y) + 0.5); c.lineTo(vizW, Math.round(y) + 0.5); c.stroke();
+  }
+  c.strokeStyle = 'rgba(25,246,255,0.22)';
+  for (i = -14; i <= 14; i++) {
+    c.beginPath(); c.moveTo(cx + i * 18, hy); c.lineTo(cx + i * vizW / 6, vizH); c.stroke();
+  }
+}
+function vizTape() {
+  var b = vizL.bay, k = Math.min((b[2] - 40) / 320, (b[3] - 36) / 200);
+  return { x: b[0] + (b[2] - 320 * k) / 2, y: b[1] + (b[3] - 200 * k) / 2 + 4, k: k };
+}
+function vizDrawBay(c) {
+  var b = vizL.bay, t = vizTape(), s = queue[qIndex] || {}, i;
+  vzWell(c, b, 18, 6, '01 // TAPE TRANSPORT', '#06070c');
+  c.save();
+  c.translate(t.x, t.y); c.scale(t.k, t.k);
+  /* smoked shell */
+  vzRR(c, 0, 0, 320, 200, 12);
+  var g = c.createLinearGradient(0, 0, 0, 200);
+  g.addColorStop(0, '#3c414c'); g.addColorStop(0.5, '#262a32'); g.addColorStop(1, '#16181d');
+  c.fillStyle = g; c.fill();
+  c.strokeStyle = 'rgba(127,248,255,0.4)'; c.lineWidth = 1.5; c.stroke();
+  c.save(); vzRR(c, 0, 0, 320, 200, 12); c.clip();
+  c.fillStyle = 'rgba(255,255,255,0.05)';
+  c.beginPath(); c.moveTo(150, 0); c.lineTo(230, 0); c.lineTo(110, 200); c.lineTo(30, 200); c.closePath(); c.fill();
+  c.restore();
+  /* label */
+  vzRR(c, 20, 12, 280, 124, 6); c.fillStyle = '#0c0d15'; c.fill();
+  var stripes = ['#ff2bd6', '#b13cff', '#5a6cff', '#19f6ff'];
+  for (i = 0; i < 4; i++) { c.fillStyle = stripes[i]; c.fillRect(20, 82 + i * 5, 280, 5); }
+  c.fillStyle = 'rgba(127,248,255,0.12)';
+  for (i = 0; i < 18; i++) c.fillRect(250 + (i % 6) * 7, 112 + Math.floor(i / 6) * 6, 3, 3);
+  c.textAlign = 'left';
+  vzFont(c, 14, true); c.fillStyle = '#ff2bd6'; c.fillText('A', 30, 32);
+  vzFont(c, 13, true); c.fillStyle = '#e9fbff'; c.fillText(vzFit(c, s.title || 'Submini', 236), 48, 32);
+  c.fillStyle = 'rgba(127,248,255,0.3)'; c.fillRect(30, 40, 260, 1);
+  vzFont(c, 10, false); c.fillStyle = 'rgba(200,220,235,0.65)'; c.fillText(vzFit(c, s.artist || '', 200), 30, 56);
+  vzFont(c, 9, true, true); c.fillStyle = '#7ff8ff'; c.textAlign = 'right'; c.fillText('TYPE II · 60', 290, 56);
+  vzRR(c, 74, 66, 172, 52, 26); c.fillStyle = '#020205'; c.fill();
+  c.beginPath(); c.moveTo(64, 200); c.lineTo(80, 158); c.lineTo(240, 158); c.lineTo(256, 200); c.closePath();
+  c.fillStyle = '#1e2128'; c.fill();
+  c.strokeStyle = 'rgba(255,255,255,0.12)'; c.lineWidth = 1; c.stroke();
+  c.fillStyle = '#000';
+  vzDot(c, 104, 181, 6); vzDot(c, 216, 181, 6); c.fillRect(148, 172, 24, 12);
+  vzScrew(c, 10, 10, 4, 0.2); vzScrew(c, 310, 10, 4, 0.9); vzScrew(c, 10, 190, 4, 0.5); vzScrew(c, 310, 190, 4, 0);
+  c.restore();
+}
+function vizDrawVfd(c) {
+  var r = vizL.vfd, s = queue[qIndex] || {}, x = r[0] + 18, w = r[2] - 36, i;
+  vzWell(c, r, 12, 4, '02 // DATA LINK', '#030a0d');
+  c.fillStyle = 'rgba(127,248,255,0.035)';
+  for (i = r[1] + 4; i < r[1] + r[3] - 3; i += 3) c.fillRect(r[0] + 6, i, r[2] - 12, 1);
+  vzGlow(c, '#19f6ff', 7);
+  c.fillStyle = VFD;
+  c.beginPath(); c.moveTo(x, r[1] + 15); c.lineTo(x + 9, r[1] + 20); c.lineTo(x, r[1] + 25); c.closePath(); c.fill();
+  vzFont(c, 11, true, true); c.textAlign = 'left';
+  c.fillText('PLAY', x + 15, r[1] + 24);
+  c.fillStyle = '#ff7ae6';
+  c.fillText('TRK ' + vzPad2(qIndex + 1) + '/' + vzPad2(queue.length), x + 62, r[1] + 24);
+  c.textAlign = 'left';
+  vzFont(c, 22, true);
+  vizTitleFit = vzFit(c, s.title || '', w);
+  vizGl = { x: x, y: r[1] + 58, w: Math.min(w, c.measureText(vizTitleFit).width) };
+  c.fillStyle = '#e4fdff';
+  c.fillText(vizTitleFit, x, r[1] + 58);
+  vzFont(c, 14, false); c.fillStyle = 'rgba(127,248,255,0.68)';
+  var sub = [s.artist, s.album].join(' · ').replace(/^ · | · $/g, '');
+  c.fillText(vzFit(c, sub, w - 110), x, r[1] + 86);
+  vzNoGlow(c);
+  vzFont(c, 22, true, true); c.textAlign = 'right'; c.fillStyle = 'rgba(127,248,255,0.07)';
+  c.fillText('88:88', x + w, r[1] + r[3] - 14);
+}
+function vuGeom(r) { return { cx: r[0] + r[2] / 2, py: r[1] + r[3] * 1.12, R: r[3] * 0.98 }; }
+function vuAngle(p) { return (-48 + 96 * p) * Math.PI / 180; } // 0 = straight up
+function vuPos(db) { return (Math.pow(10, db / 20) - 0.1) / (1.4125 - 0.1); }
+function vizDrawVuFace(c, r, label) {
+  var m = vuGeom(r), R1 = m.R * 0.76, i, a, db;
+  vzWell(c, r, 10, 3, '', '#050a12');
+  c.save();
+  vzCut(c, r[0], r[1], r[2], r[3], 10, 3); c.clip();
+  var g = c.createLinearGradient(0, r[1], 0, r[1] + r[3]);
+  g.addColorStop(0, '#0d1826'); g.addColorStop(1, '#04070c');
+  c.fillStyle = g; c.fillRect(r[0], r[1], r[2], r[3]);
+  c.fillStyle = 'rgba(127,248,255,0.05)';
+  for (i = r[0] + 8; i < r[0] + r[2]; i += 12) c.fillRect(i, r[1], 1, r[3]);
+  for (i = r[1] + 8; i < r[1] + r[3]; i += 12) c.fillRect(r[0], i, r[2], 1);
+  var up = -Math.PI / 2, a0 = vuAngle(0), aZ = vuAngle(vuPos(0)), a1 = vuAngle(1);
+  vzGlow(c, '#19f6ff', 6);
+  c.lineWidth = 1.5; c.strokeStyle = '#7ff8ff';
+  c.beginPath(); c.arc(m.cx, m.py, R1, up + a0, up + aZ, false); c.stroke();
+  vzGlow(c, '#ff2bd6', 10);
+  c.lineWidth = 5; c.strokeStyle = '#ff2bd6';
+  c.beginPath(); c.arc(m.cx, m.py, R1 + 2.5, up + aZ, up + a1, false); c.stroke();
+  vzGlow(c, '#19f6ff', 4);
+  vzFont(c, 9, true, true); c.textAlign = 'center';
+  for (i = 0; i < VU_DB.length; i++) {
+    db = VU_DB[i];
+    a = vuAngle(vuPos(db));
+    var sa = Math.sin(a), ca = Math.cos(a), col = db > 0 ? '#ff7ae6' : '#7ff8ff';
+    c.strokeStyle = col; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(m.cx + sa * R1, m.py - ca * R1); c.lineTo(m.cx + sa * (R1 + 8), m.py - ca * (R1 + 8)); c.stroke();
+    c.fillStyle = col;
+    c.fillText(String(Math.abs(db)), m.cx + sa * (R1 + 17), m.py - ca * (R1 + 17) + 3);
+  }
+  vzNoGlow(c);
+  vzFont(c, 15, true, true); c.fillStyle = 'rgba(127,248,255,0.3)';
+  c.fillText('VU', m.cx, r[1] + r[3] * 0.74);
+  vzFont(c, 11, true, true); c.textAlign = 'left'; c.fillStyle = '#7ff8ff';
+  c.fillText(label + '-CH', r[0] + 10, r[1] + r[3] - 16);
+  c.restore();
+  c.fillStyle = '#2a0b25'; vzDot(c, r[0] + r[2] - 13, r[1] + 13, 4);
+}
+function specGeom() {
+  var r = vizL.spec, cols = 16, segs = 14, gx = 6, gy = 3;
+  var x0 = r[0] + 22, y0 = r[1] + 18, w = r[2] - 44, h = r[3] - 18 - 30;
+  return { x0: x0, y0: y0, w: w, h: h, cols: cols, segs: segs, gx: gx, gy: gy,
+           cw: (w - gx * (cols - 1)) / cols, sh: (h - gy * (segs - 1)) / segs };
+}
+function segY(g, j) { return g.y0 + g.h - (j + 1) * g.sh - j * g.gy; }
+function vizDrawSpecBase(c) {
+  var r = vizL.spec, g = specGeom(), i, j;
+  vzWell(c, r, 16, 6, '05 // SPECTRUM ANALYZER', '#04050a');
+  for (j = 0; j < g.segs; j++) {
+    c.fillStyle = SPEC_OFF[j];
+    for (i = 0; i < g.cols; i++) c.fillRect(g.x0 + i * (g.cw + g.gx), segY(g, j), g.cw, g.sh);
+  }
+  vzFont(c, 9, true, true); c.textAlign = 'center'; c.fillStyle = 'rgba(127,248,255,0.5)';
+  for (i = 0; i < g.cols; i += 3) {
+    var hz = 55 * Math.pow(200, i / (g.cols - 1));
+    var lab = hz >= 1000 ? (Math.round(hz / 100) / 10) + 'k' : String(Math.round(hz / 10) * 10);
+    c.fillText(lab, g.x0 + i * (g.cw + g.gx) + g.cw / 2, r[1] + r[3] - 10);
+  }
+}
+function vizDrawLedRow(c) {
+  var items = [['PLAY', ''], ['PEAK', ''], ['SYNC', ''], ['TYPE II', '#f5e663'], ['NR OFF', '']];
+  var x = 48, y = vizL.leds, i, s = queue[qIndex] || {};
+  vizLeds = [];
+  vzFont(c, 9, true, true); c.textAlign = 'left';
+  for (i = 0; i < items.length; i++) {
+    vzScrew(c, x, y, 6.5, 0); // a polished bezel
+    c.fillStyle = '#0a0b0e'; vzDot(c, x, y, 4.6);
+    if (items[i][1]) { vzGlow(c, items[i][1], 8); c.fillStyle = items[i][1]; vzDot(c, x, y, 3.6); vzNoGlow(c); }
+    c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillText(items[i][0], x + 12, y + 4.5);
+    c.fillStyle = 'rgba(225,232,240,0.78)'; c.fillText(items[i][0], x + 12, y + 3.5);
+    vizLeds.push(x);
+    x += c.measureText(items[i][0]).width + 38;
+  }
+  /* data ticker in a slot after the lamps */
+  var x0 = x - 14, x1 = vizL.w - 44;
+  vizTick = null;
+  if (x1 - x0 < 120) return;
+  vzCut(c, x0, y - 11, x1 - x0, 22, 7, 0);
+  c.fillStyle = '#030a0d'; c.fill();
+  vzBevel(c, y - 11, 22, false, 2);
+  vzFont(c, 9, true, true); c.fillStyle = '#ff5ae0';
+  vzGlow(c, '#ff2bd6', 6); c.fillText('RX ▸', x0 + 10, y + 3.5); vzNoGlow(c);
+  var txt = '◆  ' + [s.title, s.artist, s.album].join('  ◆  ').replace(/(  ◆  )+$/, '') +
+    '  ◆  SUBMINI NEURAL AUDIO LINK  ◆  信号同步  ◆  ';
+  vzFont(c, 11, false);
+  var tw = Math.ceil(c.measureText(txt).width), cv = document.createElement('canvas');
+  cv.width = Math.ceil(tw * vizS); cv.height = Math.ceil(20 * vizS);
+  var tc = cv.getContext('2d');
+  tc.scale(vizS, vizS); vzFont(tc, 11, false); tc.textBaseline = 'alphabetic';
+  tc.fillStyle = '#7ff8ff'; tc.fillText(txt, 0, 14);
+  vizTick = { x0: x0 + 42, x1: x1 - 6, y: y - 10, tw: tw, cv: cv };
+}
+/* ---- dynamic layer: only the moving parts, each cleared in place ---- */
+function vzHub(c, x, y, ang) {
+  c.save(); c.translate(x, y); c.rotate(ang);
+  c.fillStyle = '#cfd6de'; vzDot(c, 0, 0, 12);
+  c.fillStyle = '#2a2d34';
+  for (var i = 0; i < 6; i++) { c.rotate(Math.PI / 3); c.fillRect(-1.6, -11, 3.2, 5); }
+  c.fillStyle = '#19f6ff'; vzDot(c, 0, 0, 3.5);
+  c.restore();
+}
+function vizDrawReels(c, frac) {
+  var t = vizTape();
+  c.save(); c.translate(t.x, t.y); c.scale(t.k, t.k);
+  c.clearRect(71, 63, 178, 58);
+  c.save(); vzRR(c, 74, 66, 172, 52, 26); c.clip();
+  c.fillStyle = '#2a1830';
+  vzDot(c, 112, 92, 15 + 29 * (1 - frac)); vzDot(c, 208, 92, 15 + 29 * frac);
+  c.strokeStyle = 'rgba(255,43,214,0.45)'; c.lineWidth = 1.2;
+  c.beginPath(); c.arc(112, 92, 15 + 29 * (1 - frac), 0, Math.PI * 2, false); c.stroke();
+  c.beginPath(); c.arc(208, 92, 15 + 29 * frac, 0, Math.PI * 2, false); c.stroke();
+  c.restore();
+  vzHub(c, 112, 92, vizAngL);
+  vzHub(c, 208, 92, vizAngR);
+  vzRR(c, 74, 66, 172, 52, 26); c.strokeStyle = 'rgba(127,248,255,0.5)'; c.lineWidth = 1.5; c.stroke();
+  c.restore();
+}
+function vizDrawNeedle(c, r, p, peak) {
+  c.clearRect(r[0] - 1, r[1] - 1, r[2] + 2, r[3] + 2);
+  var m = vuGeom(r), a = vuAngle(p), len = m.R * 0.97;
+  var tx = m.cx + Math.sin(a) * len, ty = m.py - Math.cos(a) * len;
+  c.save(); vzCut(c, r[0], r[1], r[2], r[3], 10, 3); c.clip();
+  /* glow faked with a wide translucent stroke: no per-frame shadowBlur */
+  c.strokeStyle = 'rgba(255,43,214,0.28)'; c.lineWidth = 6;
+  c.beginPath(); c.moveTo(m.cx, m.py); c.lineTo(tx, ty); c.stroke();
+  c.strokeStyle = '#ffe1f8'; c.lineWidth = 1.6;
+  c.beginPath(); c.moveTo(m.cx, m.py); c.lineTo(tx, ty); c.stroke();
+  c.fillStyle = '#2b2e35'; c.fillRect(r[0], r[1] + r[3] - 10, r[2], 10);
+  c.fillStyle = '#4c5059'; c.fillRect(r[0], r[1] + r[3] - 9, r[2], 3);
+  c.fillStyle = 'rgba(127,248,255,0.6)'; c.fillRect(r[0], r[1] + r[3] - 10, r[2], 1);
+  c.fillStyle = 'rgba(255,255,255,0.045)';
+  c.beginPath(); c.moveTo(r[0], r[1]); c.lineTo(r[0] + r[2] * 0.55, r[1]); c.lineTo(r[0] + r[2] * 0.25, r[1] + r[3]); c.lineTo(r[0], r[1] + r[3]); c.closePath(); c.fill();
+  c.restore();
+  if (peak > 0.04) {
+    c.fillStyle = 'rgba(255,43,214,' + (peak * 0.35).toFixed(2) + ')'; vzDot(c, r[0] + r[2] - 13, r[1] + 13, 8);
+    c.fillStyle = 'rgba(255,170,240,' + peak.toFixed(2) + ')'; vzDot(c, r[0] + r[2] - 13, r[1] + 13, 4);
+  }
+}
+/* VU ballistics: a damped spring, so the needle swings and settles like
+   a real movement instead of jumping to each value */
+function vizNeedleStep(n, target, dt) {
+  var k = 150, d = 2 * Math.sqrt(k) * 0.6, steps = Math.ceil(dt / 0.01), h = dt / steps, i;
+  for (i = 0; i < steps; i++) { n.v += (k * (target - n.p) - d * n.v) * h; n.p += n.v * h; }
+  if (n.p < -0.02) { n.p = -0.02; n.v = 0; }
+  if (n.p > 1.03) { n.p = 1.03; n.v = 0; }
+}
+function vizDrawSpectrum(c, dt) {
+  var g = specGeom(), i, j, lit = [], t = new Date().getTime() / 1000;
+  for (i = 0; i < g.cols; i++) {
+    var p = i / (g.cols - 1) * 7, b0 = Math.floor(p), f = p - b0;
+    var v = b0 >= 7 ? vizLvl[7] : vizLvl[b0] * (1 - f) + vizLvl[b0 + 1] * f;
+    v = Math.pow(v, 1.4) * (0.88 + 0.12 * Math.sin(t * (3 + (i % 5) * 0.7) + i * 1.9));
+    var n = Math.max(0, Math.min(g.segs, Math.round(v * g.segs)));
+    lit.push(n);
+    if (vizPeak[i] === undefined || n >= vizPeak[i]) { vizPeak[i] = n; vizPeakHold[i] = 0.5; }
+    else if ((vizPeakHold[i] -= dt) <= 0) vizPeak[i] = Math.max(n, vizPeak[i] - dt * 10);
+  }
+  c.clearRect(g.x0 - 1, g.y0 - 1, g.w + 2, g.h + 2);
+  for (j = 0; j < g.segs; j++) {
+    c.fillStyle = SPEC_ON[j];
+    var y = segY(g, j);
+    for (i = 0; i < g.cols; i++) if (j < lit[i]) c.fillRect(g.x0 + i * (g.cw + g.gx), y, g.cw, g.sh);
+  }
+  c.fillStyle = '#ffffff';
+  for (i = 0; i < g.cols; i++) {
+    var pk = Math.round(vizPeak[i]) - 1;
+    if (pk >= 0 && pk >= lit[i] - 1) c.fillRect(g.x0 + i * (g.cw + g.gx), segY(g, pk), g.cw, Math.max(2, g.sh * 0.4));
+  }
+  /* radar-style scan bar sweeping the analyser */
+  vizSweep = (vizSweep + dt / 3.2) % 1;
+  var sx = g.x0 + vizSweep * (g.w + 60) - 60;
+  var sl = Math.max(g.x0, sx), sr = Math.min(g.x0 + g.w, sx + 60);
+  if (sr > sl) {
+    c.fillStyle = 'rgba(25,246,255,0.05)'; c.fillRect(sl, g.y0, sr - sl, g.h);
+    sl = Math.max(g.x0, sx + 30);
+    if (sr > sl) { c.fillStyle = 'rgba(25,246,255,0.06)'; c.fillRect(sl, g.y0, sr - sl, g.h); }
+    if (sx + 59 >= g.x0 && sx + 59 < g.x0 + g.w) { c.fillStyle = 'rgba(160,250,255,0.4)'; c.fillRect(sx + 59, g.y0, 1, g.h); }
+  }
+}
+function vizDrawCounter(c) {
+  var sec = Math.floor(audio.currentTime || 0);
+  if (sec === vizCounterSec) return;
+  vizCounterSec = sec;
+  var r = vizL.vfd, x = r[0] + r[2] - 18, y = r[1] + r[3] - 14;
+  c.clearRect(x - 96, y - 28, 100, 36);
+  vzFont(c, 22, true, true); c.textAlign = 'right'; c.fillStyle = VFD;
+  vzGlow(c, '#19f6ff', 8);
+  c.fillText(vzPad2(Math.floor(sec / 60) % 100) + ':' + vzPad2(sec % 60), x, y);
+  vzNoGlow(c);
+}
+function vizDrawClock(c) {
+  var d = new Date(), ct = d.getHours() + ':' + vzPad2(d.getMinutes());
+  if (ct === vizClockDrawn) return;
+  vizClockDrawn = vizClockText = ct;
+  var r = vizL.vfd, x = r[0] + r[2] - 18, y = r[1] + 24;
+  c.clearRect(x - 50, y - 13, 53, 17);
+  vzFont(c, 11, true, true); c.textAlign = 'right'; c.fillStyle = VFD;
+  vzGlow(c, '#19f6ff', 7); c.fillText(ct, x, y); vzNoGlow(c);
+}
+/* on a hard beat the title tears into RGB-split slices for a few frames */
+function vizDrawGlitch(c, on) {
+  var g = vizGl, k;
+  if (!g || (!on && !vizGlitchShown)) return;
+  c.clearRect(g.x - 14, g.y - 27, g.w + 28, 35);
+  vizGlitchShown = on;
+  if (!on) return;
+  vzFont(c, 22, true); c.textAlign = 'left';
+  for (k = 0; k < 3; k++) {
+    var sy = g.y - 25 + Math.random() * 26, sh = 3 + Math.random() * 7, dx = (Math.random() - 0.5) * 18;
+    c.save(); c.beginPath(); c.rect(g.x - 14, sy, g.w + 28, sh); c.clip();
+    c.fillStyle = '#030a0d'; c.fillRect(g.x - 14, sy, g.w + 28, sh);
+    c.fillStyle = 'rgba(255,43,214,0.95)'; c.fillText(vizTitleFit, g.x + dx + 2.5, g.y);
+    c.fillStyle = 'rgba(25,246,255,0.9)'; c.fillText(vizTitleFit, g.x + dx - 2.5, g.y);
+    c.restore();
+  }
+}
+function vizDrawTicker(c, dt) {
+  var k = vizTick;
+  if (!k) return;
+  vizTickOff = (vizTickOff + dt * 38) % k.tw;
+  c.clearRect(k.x0, k.y, k.x1 - k.x0, 20);
+  c.save(); c.beginPath(); c.rect(k.x0, k.y, k.x1 - k.x0, 20); c.clip();
+  c.drawImage(k.cv, k.x0 - vizTickOff, k.y, k.tw, 20);
+  if (k.tw - vizTickOff < k.x1 - k.x0) c.drawImage(k.cv, k.x0 - vizTickOff + k.tw, k.y, k.tw, 20);
+  c.restore();
+}
+function vizDrawLeds(c, playing, synced, now) {
+  var y = vizL.leds, i;
+  for (i = 0; i < 3; i++) c.clearRect(vizLeds[i] - 9, y - 9, 18, 18);
+  function lamp(x, rgb, a) {
+    c.fillStyle = 'rgba(' + rgb + ',' + (a * 0.3).toFixed(2) + ')'; vzDot(c, x, y, 8);
+    c.fillStyle = 'rgba(' + rgb + ',' + a.toFixed(2) + ')'; vzDot(c, x, y, 3.6);
+  }
+  if (playing) lamp(vizLeds[0], '25,246,255', 1);
+  if (vizBeat > 0.04) lamp(vizLeds[1], '255,43,214', Math.min(1, vizBeat * 1.4));
+  if (synced) lamp(vizLeds[2], '120,255,170', 1);
+  else if (playing && Math.floor(now / 500) % 2) lamp(vizLeds[2], '255,170,60', 0.9);
+}
+function vizShowSong() {
+  vizSongId = nowPlayingId;
+  vizLastFrame = -1;
+  vizDrawPanel();
+  rhyFetch(nowPlayingId);
+  /* warm the next song too (the server analyses one at a time, in order) */
+  if (!shuffleOn && queue[qIndex + 1]) rhyFetch(queue[qIndex + 1].id);
+}
+function startViz() {
+  if (saverOn) saverOff();
+  saverOn = true;
+  saverMode = 'viz';
+  vizPausedAt = 0;
+  $('viz').style.display = 'block';
+  var b;
+  for (b = 0; b < 8; b++) { vizLvl[b] = 0; vizTgt[b] = 0; }
+  vizPeak = []; vizPeakHold = [];
+  vizNeedles = [{ p: 0, v: 0 }, { p: 0, v: 0 }];
+  vizEnergy = 0; vizBeat = 0; vizGlowOp = -1; vizNightAt = 0;
+  vizGlitch = 0; vizTickOff = 0; vizSweep = 0;
+  var d = new Date();
+  vizClockText = d.getHours() + ':' + vzPad2(d.getMinutes());
+  vizSongId = nowPlayingId;
+  vizLayout();
+  vizApplyTheme();
+  vizShowSong();
+  vizLast = 0;
+  if (!vizRaf) vizRaf = requestAnimationFrame(vizStep);
+}
+function vizHide() {
+  if (vizRaf) { cancelAnimationFrame(vizRaf); vizRaf = null; }
+  $('viz').style.display = 'none';
+}
+window.addEventListener('resize', function () {
+  if (saverOn && saverMode === 'viz') { vizLayout(); vizApplyTheme(); }
+});
+function vizStep(ts) {
+  vizRaf = requestAnimationFrame(vizStep);
+  if (vizLast && ts - vizLast < VIZ_FRAME_MS) return;
+  var dt = vizLast ? (ts - vizLast) / 1000 : 0.04;
+  vizLast = ts;
+  if (dt > 0.2) dt = 0.2;
+  var now = new Date().getTime(), b, i;
+  if (nowPlayingId !== vizSongId) vizShowSong();
+  if (vizTheme !== vizThemeRef) vizApplyTheme();
+  var playing = !audio.paused && !audio.ended;
+  if (playing) vizPausedAt = 0; else if (!vizPausedAt) vizPausedAt = now;
+
+  /* targets for this moment, from the song's envelope */
+  var tgt = vizTgt, energy = 0, data = rhyCache[nowPlayingId];
+  if (playing && data) {
+    var fp = audio.currentTime * data.fps, f0 = Math.floor(fp), fr = fp - f0, st = data.stride, d = data.d;
+    if (f0 < 0) f0 = 0;
+    if (f0 < data.n - 1) {
+      var o0 = f0 * st, o1 = o0 + st;
+      for (b = 0; b < 8; b++) tgt[b] = (d[o0 + b] * (1 - fr) + d[o1 + b] * fr) / 255;
+      energy = (d[o0 + 8] * (1 - fr) + d[o1 + 8] * fr) / 255;
+      /* beats passed since the last drawn frame (none after a seek back) */
+      if (vizLastFrame >= 0 && f0 > vizLastFrame && f0 - vizLastFrame < 20) {
+        var strongest = 0;
+        for (i = vizLastFrame + 1; i <= f0; i++) if (d[i * st + 9] > strongest) strongest = d[i * st + 9];
+        if (strongest) {
+          vizBeat = Math.max(vizBeat, strongest / 255);
+          if (strongest > 190 && Math.random() < 0.6) vizGlitch = 0.13;
+        }
+      }
+      vizLastFrame = f0;
+    } else {
+      for (b = 0; b < 8; b++) tgt[b] = 0;
+    }
+  } else if (playing) {
+    /* no envelope (yet): a slow breathing wave */
+    for (b = 0; b < 8; b++) tgt[b] = 0.22 + 0.14 * Math.sin(now / 900 + b * 0.8);
+    energy = 0.3;
+  } else {
+    for (b = 0; b < 8; b++) tgt[b] = 0;
+  }
+  /* fast attack, slow release, like LED meter decay */
+  var up = Math.min(1, dt * 28), down = Math.min(1, dt * 7);
+  for (b = 0; b < 8; b++) vizLvl[b] += (tgt[b] - vizLvl[b]) * (tgt[b] > vizLvl[b] ? up : down);
+  vizEnergy += (energy - vizEnergy) * Math.min(1, dt * 6);
+  vizBeat = Math.max(0, vizBeat - dt * 3.2);
+
+  var frac = (audio.duration && isFinite(audio.duration)) ? audio.currentTime / audio.duration : 0;
+  if (playing) {
+    /* real-deck-ish speed, gentler than the player's walkman */
+    vizAngL = (vizAngL + 28 / (15 + 29 * (1 - frac)) * dt) % (Math.PI * 2);
+    vizAngR = (vizAngR + 28 / (15 + 29 * frac) * dt) % (Math.PI * 2);
+  }
+  var c = vizDc;
+  vizDrawReels(c, frac);
+  /* left meter leans on the lows, right on the highs: a stereo feel
+     from a mono envelope */
+  var lvL = (tgt[0] + tgt[1] + tgt[2]) / 3 * 0.55 + energy * 0.45;
+  var lvR = (tgt[4] + tgt[5] + tgt[6]) / 3 * 0.55 + energy * 0.45;
+  vizNeedleStep(vizNeedles[0], playing ? 0.05 + lvL * 0.85 : 0, dt);
+  vizNeedleStep(vizNeedles[1], playing ? 0.05 + lvR * 0.85 : 0, dt);
+  var red = vuPos(1);
+  for (i = 0; i < 2; i++) {
+    var np = vizNeedles[i].p;
+    vizDrawNeedle(c, vizL.vu[i], np, np > red ? 1 : 0);
+  }
+  vizDrawSpectrum(c, dt);
+  vizDrawCounter(c);
+  vizDrawClock(c);
+  vizGlitch = Math.max(0, vizGlitch - dt);
+  vizDrawGlitch(c, vizGlitch > 0);
+  if (playing) vizDrawTicker(c, dt);
+  vizDrawLeds(c, playing, !!data, now);
+
+  var bass = (vizLvl[0] + vizLvl[1]) / 2;
+  var gop = Math.min(1, 0.12 + bass * 0.35 + vizBeat * 0.25);
+  if (Math.abs(gop - vizGlowOp) > 0.015) { $('vzGlow').style.opacity = gop.toFixed(2); vizGlowOp = gop; }
+  /* night hours: same rule as the picture saver, but dimmed rather
+     than blacked out, since the music is still playing */
+  if (now - vizNightAt > 30000) {
+    vizNightAt = now;
+    $('vzDim').style.opacity = saverNightActive() ? '0.72' : '0';
+  }
 }
 /* Seek: tap anywhere on the bar, or drag (touch) with live preview; the
    actual seek happens on release so the stream is hit only once. */

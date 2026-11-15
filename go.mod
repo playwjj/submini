@@ -2,7 +2,10 @@ module submini
 
 go 1.26.0
 
-require modernc.org/sqlite v1.62.0
+require (
+	github.com/hajimehoshi/go-mp3 v0.3.4
+	modernc.org/sqlite v1.62.0
+)
 
 require (
 	github.com/dustin/go-humanize v1.1.0 // indirect
