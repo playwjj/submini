@@ -44,6 +44,8 @@ const (
 	rhythmDiskMax  = 48 << 20        // disk layer under DATA_DIR/rhythm
 	rhythmTimeout  = 3 * time.Minute // fetch + decode, per song
 	rhythmVersion  = 1               // bump when the analysis changes
+	rhythmFailTTL  = time.Hour       // a failed song is not retried within this window
+	rhythmMaxQueue = 4               // analyses waiting their turn; beyond this, refuse
 )
 
 // Band centre frequencies (Hz), roughly one per octave from sub-bass up.
@@ -63,9 +65,21 @@ type rhythmCache struct {
 	items    map[string]*rhythmResult
 	order    []string
 	inflight map[string]*rhythmCall
+	fails    map[string]rhythmFail
+	waiting  int           // analyses queued behind the one running
 	sem      chan struct{} // one analysis at a time: it is CPU-bound
 	dir      string
 }
+
+// rhythmFail is a recent analysis failure, kept so a song that cannot
+// be analysed (upstream error, undecodable file) is not fetched and
+// decoded again on every ask.
+type rhythmFail struct {
+	at  time.Time
+	err error
+}
+
+var errRhythmBusy = errors.New("rhythm analysis queue full")
 
 type rhythmCall struct {
 	done chan struct{}
@@ -73,11 +87,16 @@ type rhythmCall struct {
 	err  error
 }
 
-var rhythms = &rhythmCache{
-	items:    make(map[string]*rhythmResult),
-	inflight: make(map[string]*rhythmCall),
-	sem:      make(chan struct{}, 1),
+func newRhythmCache() *rhythmCache {
+	return &rhythmCache{
+		items:    make(map[string]*rhythmResult),
+		inflight: make(map[string]*rhythmCall),
+		fails:    make(map[string]rhythmFail),
+		sem:      make(chan struct{}, 1),
+	}
 }
+
+var rhythms = newRhythmCache()
 
 func (c *rhythmCache) fileFor(key string) string {
 	if c.dir == "" {
@@ -90,6 +109,7 @@ func (c *rhythmCache) fileFor(key string) string {
 func (c *rhythmCache) remember(key string, r *rhythmResult) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	delete(c.fails, key)
 	if _, ok := c.items[key]; !ok {
 		c.order = append(c.order, key)
 	}
@@ -98,6 +118,20 @@ func (c *rhythmCache) remember(key string, r *rhythmResult) {
 		delete(c.items, c.order[0])
 		c.order = c.order[1:]
 	}
+}
+
+// recordFail remembers an analysis failure for rhythmFailTTL and
+// prunes expired entries while it is there.
+func (c *rhythmCache) recordFail(key string, err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	for k, f := range c.fails {
+		if now.Sub(f.at) >= rhythmFailTTL {
+			delete(c.fails, k)
+		}
+	}
+	c.fails[key] = rhythmFail{at: now, err: err}
 }
 
 // Disk format: 4-byte version, 4-byte frame count, then the raw frames.
@@ -197,6 +231,13 @@ func (c *rhythmCache) get(ctx context.Context, key string, open func(context.Con
 		c.mu.Unlock()
 		return r, nil
 	}
+	if f, ok := c.fails[key]; ok {
+		if time.Since(f.at) < rhythmFailTTL {
+			c.mu.Unlock()
+			return nil, f.err
+		}
+		delete(c.fails, key)
+	}
 	if call, ok := c.inflight[key]; ok {
 		c.mu.Unlock()
 		select {
@@ -224,18 +265,34 @@ func (c *rhythmCache) get(ctx context.Context, key string, open func(context.Con
 			call.res = r
 			return
 		}
+		// One analysis runs at a time; a short queue may wait, but a
+		// burst of track-skipping must not line up unbounded work.
+		// Refusing is not the song's failure: no negative cache.
+		c.mu.Lock()
+		if c.waiting >= rhythmMaxQueue {
+			c.mu.Unlock()
+			call.err = errRhythmBusy
+			return
+		}
+		c.waiting++
+		c.mu.Unlock()
 		c.sem <- struct{}{}
+		c.mu.Lock()
+		c.waiting--
+		c.mu.Unlock()
 		defer func() { <-c.sem }()
 		actx, cancel := context.WithTimeout(context.Background(), rhythmTimeout)
 		defer cancel()
 		body, err := open(actx)
 		if err != nil {
+			c.recordFail(key, err)
 			call.err = err
 			return
 		}
 		defer body.Close()
 		frames, n, err := analyzeMP3(io.LimitReader(body, rhythmMaxBytes))
 		if err != nil {
+			c.recordFail(key, err)
 			call.err = err
 			return
 		}
