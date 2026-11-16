@@ -43,6 +43,14 @@ compose 用的是 host 网络模式：Docker 默认网桥只有 IPv4，上游如
 
 注意：设置接口（`/api/*`）本身没有鉴权，这是给可信局域网用的家用小工具，别把 9898 端口直接暴露到公网。
 
+## 后端兼容性
+
+submini 对后端的要求只有一个：对方实现 Subsonic REST API。页面和代理实际用到的端点是 `ping`、`getPlaylists` / `getPlaylist`、`getAlbumList2`、`getAlbum`、`getArtists` / `getArtist`、`getRandomSongs`、`search3`、`getCoverArt`、`stream`，以及队列同步的 `getPlayQueue` / `savePlayQueue`；鉴权用 Subsonic 标准的 token+salt（`t = md5(密码 + s)`）。
+
+- **Navidrome**：开发和日常使用都基于它，全功能实测。
+- **Subgram**（[playwjj/subsonic-telegram](https://github.com/playwjj/subsonic-telegram)，一个把 Telegram 当存储的 Subsonic 服务端）：上面这些端点它全部实现，连接方式相同——设置表单里填它的地址和账号即可。两个差别注意一下：一是它不做转码，`stream` 的 `format=mp3` 参数会被忽略、直接返回导入时的原文件，所以音频本身要是 iPad 能播的 MP3/AAC（它受 Telegram 限制单文件不超过 20MB，导入的本来也以这些格式为主）；二是它单用户，账号就是部署时设定的那个。
+- 其他 Subsonic 兼容服务端（Subsonic、Airsonic、Gonic 等）理论上同样可用，但没有逐一实测；个别端点缺失时对应功能会降级，例如没有 `getPlayQueue` / `savePlayQueue` 时，打开页面后的队列恢复会退回本机 localStorage 那一份。
+
 ## 功能
 
 - 歌单 / 专辑（最新）/ 歌手 / 随机歌曲 / 搜索（歌曲·专辑·歌手）
