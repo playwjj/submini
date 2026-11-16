@@ -499,6 +499,45 @@
     #player.full #queueScroll { position: absolute; top: 53px; left: 0; right: 0; bottom: 0; padding: 4px 6px 6px 6px;
                                 overflow-y: auto; -webkit-overflow-scrolling: touch; }
   }
+  /* ---------- phones (portrait iPhone: 320–430px wide) ----------
+     Everything above is sized for the iPad; at phone width the fixed
+     sizes add up past the screen, so floats wrap onto extra rows. */
+  @media (max-width: 480px) {
+    /* fullscreen controls: 4×46 + 64 + margins fits a 335px row */
+    #player.full { padding-left: 16px; padding-right: 16px; }
+    #player.full #walkman { max-width: 100%; }
+    #player.full #ctlRow .btns { white-space: nowrap; }
+    #player.full #ctlRow .btns button { width: 46px; height: 46px; line-height: 46px; margin: 0 5px; }
+    #player.full #ctlRow #playBtn { width: 64px; height: 64px; line-height: 64px; }
+    #player.full #ctlRow .btns button .icF { width: 22px; height: 22px; }
+    #player.full #ctlRow #playBtn .icF { width: 28px; height: 28px; }
+    #player.full #ctlRow .btns button .icS { width: 20px; height: 20px; }
+    #player.full #npTitle { font-size: 22px; }
+    #player.full #queueBox { margin-left: -8px; margin-right: -8px; }
+    /* mini bar: drop prev and the expand icon (a tap on the song opens
+       the player) so the title gets the room */
+    #player:not(.full) #prevBtn, #player:not(.full) #expandBtn { display: none; }
+    #player:not(.full) #npInfo { margin-right: 112px; }
+    /* hero header: stacked and centred instead of cover-beside-text */
+    ul#list li.hero { text-align: center; padding-top: 18px; }
+    ul#list li.hero .hcv { float: none; display: block; width: 168px; height: 168px; margin: 0 auto; }
+    ul#list li.hero .htxt { padding-top: 14px; }
+    ul#list li.hero .ht { font-size: 22px; }
+    ul#list li.hero .hb button { margin: 0 4px; }
+    /* sort pills scroll sideways instead of being clipped */
+    ul#list li.segRow { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    ul#list li.segRow button { padding: 0 12px; margin-right: 4px; }
+    /* tabs: five plus the gear must stay on the one 56px row */
+    #tabs { padding: 0 6px; }
+    #tabs button { padding: 0 10px; margin-right: 0; font-size: 15px; }
+    #loginView { margin: 40px 12px 0 12px; padding: 26px 20px 22px 20px; }
+  }
+  @media (max-width: 350px) {
+    #player.full #ctlRow .btns button { width: 42px; height: 42px; line-height: 42px; margin: 0 3px; }
+    #player.full #ctlRow #playBtn { width: 58px; height: 58px; line-height: 58px; }
+    #tabs button { padding: 0 8px; }
+    ul#list li.hero .hcv { width: 140px; height: 140px; }
+  }
   /* short landscape windows (Safari with toolbars): shrink the deck */
   @media (orientation: landscape) and (min-width: 900px) and (max-height: 700px) {
     #player.full #walkman { width: 320px; }
