@@ -112,7 +112,6 @@
   #vzDim { background: #000; opacity: 0; -webkit-transition: opacity 3s; transition: opacity 3s; }
   #vzPanel, #vzCanvas { position: absolute; top: 0; left: 0; }
   #verTagLogin { text-align: center; margin-top: 10px; }
-  #verTagApp { float: right; line-height: 38px; margin-right: 10px; }
   /* ---------- app frame ---------- */
   #tabs { position: fixed; top: 0; left: 0; right: 0; z-index: 10; height: 56px; overflow: hidden;
           padding: 0 10px; background: rgba(14,16,22,0.82); -webkit-backdrop-filter: saturate(160%) blur(20px); backdrop-filter: saturate(160%) blur(20px);
@@ -121,7 +120,23 @@
                  font-size: 16px; padding: 0 15px; height: 36px; margin: 10px 2px 0 0; border-radius: 18px;
                  -webkit-transition: background-color 0.2s, color 0.2s; transition: background-color 0.2s, color 0.2s; }
   #tabs button.on { color: #fff; font-weight: bold; background: rgba(255,255,255,0.10); }
-  #tabs #logoutBtn { float: right; margin-right: 0; font-size: 14px; color: rgba(238,240,244,0.4); }
+  #tabs #setBtn { float: right; width: 40px; padding: 0; margin: 8px 0 0 0; height: 40px; border-radius: 50%; }
+  #tabs #setBtn:active, #tabs #setBtn.on { background: rgba(255,255,255,0.10); }
+  #setBtn svg { width: 20px; height: 20px; vertical-align: middle; fill: none; stroke: rgba(238,240,244,0.6);
+                stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  /* settings popover (version + logout): a full-screen mask catches the
+     outside tap — iOS 9 does not deliver taps on plain elements to a
+     document click handler */
+  #setMask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 14; cursor: pointer; }
+  #setPanel { position: fixed; top: 60px; right: 10px; z-index: 15; width: 230px; padding: 14px;
+              background: rgba(28,31,40,0.97); border: 1px solid rgba(255,255,255,0.10); border-radius: 16px;
+              box-shadow: 0 18px 40px rgba(0,0,0,0.5); }
+  body.sa #setPanel { top: 82px; }
+  #setPanel .verTag { display: block; font-size: 12px; margin: 0 2px 12px 2px; }
+  #logoutBtn { width: 100%; height: 42px; font-size: 15px; border-radius: 12px; color: #ff8a8a;
+               background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.35);
+               -webkit-transition: background-color 0.2s; transition: background-color 0.2s; }
+  #logoutBtn.arm { background: #d94b4b; color: #fff; border-color: #d94b4b; font-weight: bold; }
   #main { padding-top: 56px; }
   #searchBar { padding: 14px 16px 6px 16px; overflow: hidden; display: none; }
   #searchInput { float: left; width: 78%; box-sizing: border-box; font-size: 16px; height: 42px;
@@ -132,10 +147,10 @@
                background: #7dd3c0; color: #0b0d12; font-weight: bold; border: none; border-radius: 21px; }
   #crumb { overflow: hidden; padding: 12px 16px 4px 16px; display: none; }
   #backBtn { float: left; background: rgba(255,255,255,0.08); border: none; color: #eef0f4; font-size: 15px;
-             height: 34px; padding: 0 14px 0 10px; border-radius: 17px; margin-right: 12px; }
+             height: 40px; padding: 0 16px 0 12px; border-radius: 20px; margin-right: 12px; }
   #backBtn svg { width: 16px; height: 16px; vertical-align: -3px; fill: none; stroke: #eef0f4;
                  stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-  #crumbTitle { font-size: 17px; font-weight: bold; line-height: 34px; white-space: nowrap;
+  #crumbTitle { font-size: 17px; font-weight: bold; line-height: 40px; white-space: nowrap;
                 overflow: hidden; text-overflow: ellipsis; color: rgba(238,240,244,0.85); }
   #status { margin: 12px 16px 0 16px; padding: 10px 14px; color: rgba(238,240,244,0.6); font-size: 14px;
             display: none; border-radius: 12px; background: rgba(255,255,255,0.05); }
@@ -204,6 +219,62 @@
   ul#list li.card .t { font-size: 14px; margin-top: 8px; line-height: 19px; }
   ul#list li.card .s { font-size: 12px; }
   ul#list li.empty { color: rgba(238,240,244,0.45); text-align: center; padding: 40px 0; font-size: 14px; }
+  /* loading skeleton: static grey blocks (no shimmer animation — A5) */
+  ul#list li.skel:active { background: none; }
+  ul#list li.skel .sk { background: rgba(255,255,255,0.07); border-radius: 6px; }
+  ul#list li.skel .skTh { float: left; width: 44px; height: 44px; margin-right: 12px; }
+  ul#list li.skel .skL1 { height: 14px; width: 42%; margin-top: 6px; overflow: hidden; }
+  ul#list li.skel .skL2 { height: 11px; width: 26%; margin-top: 9px; overflow: hidden; }
+  ul#list li.card.skel .cv { box-shadow: none; background: rgba(255,255,255,0.07); }
+  ul#list li.card.skel .skL1 { width: 70%; margin-top: 10px; }
+  /* "⋯" on song rows: opens the action sheet */
+  ul#list li.song .more { float: right; width: 38px; height: 44px; margin: 0 -8px 0 2px; text-align: center; }
+  ul#list li.song .more svg { width: 18px; height: 18px; margin-top: 13px; fill: rgba(238,240,244,0.45); }
+  ul#list li.song .more:active svg { fill: #fff; }
+  /* album sort: a row of pills above the grid */
+  ul#list li.segRow { padding: 12px 8px 6px 8px; min-height: 0; white-space: nowrap; overflow: hidden; }
+  ul#list li.segRow:active { background: none; }
+  ul#list li.segRow button { display: inline-block; height: 34px; padding: 0 14px; margin-right: 6px; font-size: 14px;
+                             border-radius: 17px; border: none; background: rgba(255,255,255,0.07);
+                             color: rgba(238,240,244,0.7); }
+  ul#list li.segRow button.on { background: #7dd3c0; color: #0b0d12; font-weight: bold; }
+  ul#list li.moreRow { text-align: center; clear: both; padding: 14px 0 18px 0; min-height: 0; }
+  ul#list li.moreRow:active { background: none; }
+  /* artists A–Z index along the right edge */
+  body.hasAz ul#list { padding-right: 34px; }
+  #azBar { position: fixed; right: 2px; top: 64px; bottom: 90px; width: 30px; z-index: 9; text-align: center; }
+  body.sa #azBar { top: 86px; }
+  #azBar span { display: block; font-size: 11px; font-weight: bold; color: rgba(238,240,244,0.55); }
+  #azBar span.on { color: #7dd3c0; }
+  /* action sheet (song "⋯") */
+  #sheetMask { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 49; background: rgba(0,0,0,0.5);
+               cursor: pointer; }
+  #sheet { position: fixed; left: 50%; width: 420px; margin-left: -210px; bottom: 14px; z-index: 50;
+           background: rgba(30,33,42,0.98); border: 1px solid rgba(255,255,255,0.10); border-radius: 18px;
+           box-shadow: 0 20px 50px rgba(0,0,0,0.55); overflow: hidden;
+           -webkit-animation: sheetIn 0.22s ease-out; animation: sheetIn 0.22s ease-out; }
+  @-webkit-keyframes sheetIn { from { -webkit-transform: translate3d(0,40px,0); opacity: 0; } to { -webkit-transform: translate3d(0,0,0); opacity: 1; } }
+  @keyframes sheetIn { from { transform: translate3d(0,40px,0); opacity: 0; } to { transform: translate3d(0,0,0); opacity: 1; } }
+  @media (max-width: 460px) { #sheet { left: 8px; right: 8px; width: auto; margin-left: 0; } }
+  #shHead { overflow: hidden; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+  #shCover { float: left; width: 48px; height: 48px; border-radius: 8px; margin-right: 12px; background: rgba(255,255,255,0.06); }
+  #shHead .t { font-size: 16px; font-weight: bold; line-height: 22px; margin-top: 3px;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #shHead .s { font-size: 13px; color: rgba(238,240,244,0.5); margin-top: 2px;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sheet button { display: block; width: 100%; height: 52px; padding: 0 18px; text-align: left; font-size: 16px;
+                  background: none; border: none; color: #eef0f4; border-top: 1px solid rgba(255,255,255,0.05);
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #sheet button:first-child { border-top: none; }
+  #sheet button:active { background: rgba(255,255,255,0.08); }
+  #sheet #shCancel { text-align: center; color: rgba(238,240,244,0.6); border-top: 6px solid rgba(0,0,0,0.25); }
+  /* toast (with an optional action, e.g. undo) */
+  #toastWrap { position: fixed; left: 0; right: 0; bottom: 96px; z-index: 45; text-align: center; pointer-events: none; }
+  #toast { display: inline-block; pointer-events: auto; padding: 10px 16px; font-size: 14px; color: #fff;
+           background: rgba(34,37,46,0.96); border: 1px solid rgba(255,255,255,0.12); border-radius: 22px;
+           box-shadow: 0 10px 26px rgba(0,0,0,0.45); }
+  #toast button { margin-left: 12px; background: none; border: none; padding: 0; font-size: 14px;
+                  font-weight: bold; color: #7dd3c0; }
   /* animated equaliser shown on the playing row */
   .eq { display: inline-block; width: 16px; height: 14px; position: relative; vertical-align: middle; }
   .eq i { position: absolute; bottom: 0; width: 3px; height: 14px; background: #7dd3c0; border-radius: 1px;
@@ -308,7 +379,7 @@
   #player:not(.full) #barCover { display: block; float: left; width: 52px; height: 52px; margin-right: 12px;
                                  border-radius: 8px; background: rgba(255,255,255,0.08);
                                  box-shadow: 0 4px 12px rgba(0,0,0,0.4); cursor: pointer; }
-  #player:not(.full) #npInfo { margin: 0 236px 0 0; padding-top: 7px; overflow: hidden; cursor: pointer; }
+  #player:not(.full) #npInfo { margin: 0 214px 0 0; padding-top: 7px; overflow: hidden; cursor: pointer; }
   #player:not(.full) #npTitle { font-size: 16px; }
   #player:not(.full) #npArtist { font-size: 13px; margin-top: 3px; }
   /* progress becomes a hairline along the top edge (tap target stays tall) */
@@ -320,9 +391,13 @@
   #player:not(.full) #ctlRow .btns button:active { background: rgba(255,255,255,0.12); }
   #player:not(.full) #ctlRow #playBtn { width: 48px; height: 48px; line-height: 48px; margin: -2px 6px 0 2px; }
   #player:not(.full) #ctlRow #playBtn .icF { width: 22px; height: 22px; }
-  #player:not(.full) #expandBtn { margin: 8px 0 0 6px; }
+  #player:not(.full) #expandBtn { margin: 2px 0 0 4px; }
   /* ---------- fullscreen player (default view; bar is the shrunk form) ---------- */
-  #expandBtn { float: right; margin: 12px 0 0 10px; }
+  #expandBtn { float: right; margin: 12px 0 0 10px; width: 44px; height: 44px; padding: 0; border: none;
+               border-radius: 50%; background: rgba(255,255,255,0.08); }
+  #expandBtn:active { background: rgba(255,255,255,0.18); }
+  #expandBtn svg { width: 22px; height: 22px; vertical-align: middle; fill: none; stroke: #eef0f4; stroke-width: 2.2;
+                   stroke-linecap: round; stroke-linejoin: round; }
   #fullHead { display: none; height: 44px; text-align: center; }
   #collapseBtn { float: left; width: 40px; height: 40px; padding: 0; border-radius: 50%; border: none;
                  background: rgba(255,255,255,0.12); }
@@ -389,6 +464,15 @@
   ul#queueList li.playing { background: rgba(255,255,255,0.12); }
   ul#queueList li.playing .qt { color: #7dd3c0; font-weight: bold; }
   ul#queueList li .eq { margin-top: 13px; }
+  /* already-played part of the queue recedes (sequential play only) */
+  ul#queueList li.done { opacity: 0.45; }
+  ul#queueList li .qx { float: right; width: 34px; height: 40px; margin: 0 -6px 0 2px; text-align: center; }
+  ul#queueList li .qx svg { width: 14px; height: 14px; margin-top: 13px; fill: none; stroke: rgba(255,255,255,0.4);
+                            stroke-width: 2.4; stroke-linecap: round; }
+  ul#queueList li .qx:active svg { stroke: #fff; }
+  /* artist / album in the fullscreen player jump to their pages */
+  #player.full #npArtist, #player.full #npAlbum { cursor: pointer; }
+  #player.full #npArtist:active, #player.full #npAlbum:active { opacity: 0.6; }
   /* iPad landscape: the player is one screen, no page scroll. Left column
      stacks deck, info, progress and controls; the queue is a panel on the
      right that scrolls on its own. */
@@ -400,13 +484,14 @@
                             -webkit-transform: translateY(-50%); transform: translateY(-50%); }
     #player.full #fullHead { text-align: left; }
     #player.full #fullHead .cap { margin: 0 0 0 14px; }
-    #player.full #walkman { width: 340px; margin: 6px auto 0 auto; }
+    #player.full #walkman { width: 380px; margin: 6px auto 0 auto; }
     #player.full #walkman:before { bottom: -20px; }
     #player.full #npInfo { padding-top: 24px; }
-    #player.full #npTitle { font-size: 24px; }
-    #player.full #npArtist { font-size: 16px; margin-top: 5px; }
+    #player.full #npTitle { font-size: 27px; }
+    #player.full #npArtist { font-size: 17px; margin-top: 6px; }
     #player.full #progWrap { margin-top: 10px; }
     #player.full #ctlRow { margin-top: 4px; }
+    #player.full #ctlRow .btns button { margin: 0 9px; }
     #player.full #queueBox { position: absolute; top: 16px; right: 16px; bottom: 16px; left: 51%;
                              max-width: none; margin: 0; padding: 0; overflow: hidden; }
     #player.full #queueBox .qhead { position: absolute; top: 0; left: 0; right: 0; height: 34px; padding: 10px 10px 8px 14px;
@@ -416,8 +501,9 @@
   }
   /* short landscape windows (Safari with toolbars): shrink the deck */
   @media (orientation: landscape) and (min-width: 900px) and (max-height: 700px) {
-    #player.full #walkman { width: 300px; }
+    #player.full #walkman { width: 320px; }
     #player.full #npInfo { padding-top: 18px; }
+    #player.full #npTitle { font-size: 24px; }
     #player.full #npAlbum { display: none; }
   }
 </style>
@@ -456,9 +542,14 @@
     <button id="tabArtists">歌手</button>
     <button id="tabRandom">随机</button>
     <button id="tabSearch">搜索</button>
-    <button id="logoutBtn">退出</button>
-    <span class="verTag" id="verTagApp"></span>
+    <button id="setBtn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg></button>
   </div>
+  <div id="setMask" style="display:none"></div>
+  <div id="setPanel" style="display:none">
+    <span class="verTag" id="verTagApp">submini</span>
+    <button id="logoutBtn">退出登录</button>
+  </div>
+  <div id="azBar" style="display:none"></div>
   <div id="main">
     <div id="searchBar">
       <input id="searchInput" type="search" placeholder="搜索歌曲 / 专辑 / 歌手">
@@ -686,7 +777,7 @@
       <button id="nextBtn"><svg class="icF" viewBox="0 0 24 24"><path d="M5 5 L14 12 L5 19 Z M15.4 5 H18 v14 h-2.6 Z"></path></svg></button>
       <button id="repeatBtn"><svg class="icS" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path><text class="repOne" x="12.5" y="15.8" text-anchor="middle">1</text></svg></button>
     </div>
-    <button id="expandBtn" class="miniBtn">全屏</button>
+    <button id="expandBtn"><svg viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"></polyline></svg></button>
     <div id="timeBox"><span id="tCur">0:00</span> / <span id="tTot">0:00</span></div>
   </div>
   </div>
@@ -699,6 +790,14 @@
     </div>
   </div>
 </div>
+
+<div id="sheetMask" style="display:none"></div>
+<div id="sheet" style="display:none">
+  <div id="shHead"><img id="shCover" alt=""><div class="t" id="shTitle"></div><div class="s" id="shSub"></div></div>
+  <div id="shBtns"></div>
+  <button id="shCancel">取消</button>
+</div>
+<div id="toastWrap" style="display:none"><span id="toast"><span id="toastMsg"></span><button id="toastAct"></button></span></div>
 
 <audio id="audio" preload="auto"></audio>
 <script>
@@ -721,12 +820,15 @@ function restUrl(endpoint, params, json) {
   if (json) q.push('f=json');
   return '/rest/' + endpoint + '.view?' + q.join('&');
 }
-function api(endpoint, params, ok, fail, quiet) {
+/* alive (optional): checked when the response lands; a request whose
+   view has since been left is dropped silently — no status, no render */
+function api(endpoint, params, ok, fail, quiet, alive) {
   if (!quiet) setStatus('加载中…', false);
   var xhr = new XMLHttpRequest();
   xhr.open('GET', restUrl(endpoint, params, true), true);
   xhr.onreadystatechange = function () {
     if (xhr.readyState !== 4) return;
+    if (alive && !alive()) return;
     if (xhr.status !== 200) { setStatus('请求失败（HTTP ' + xhr.status + '）', true); if (fail) fail(); return; }
     var data;
     try { data = JSON.parse(xhr.responseText); } catch (e) { setStatus('服务器响应无法解析', true); if (fail) fail(); return; }
@@ -760,6 +862,9 @@ function setCover(img, id, size) {
    image is given up on after 10s so the queue can never wedge. */
 var coverQ = [], coverBusy = 0, coverPumpArmed = false;
 function queueCover(img, url) {
+  /* remembered so a list detached mid-load (navigation cache) can
+     re-queue the covers it never got — see requeueCovers */
+  img.setAttribute('data-src', url);
   coverQ.push({ img: img, url: url });
   if (!coverPumpArmed) {
     coverPumpArmed = true;
@@ -797,7 +902,18 @@ function startCover(it) {
    scrolling, instead of all competing at once. */
 var lazyCovers = [], lazyTimer = null;
 function lazyCover(img, id, size) {
-  lazyCovers.push({ img: img, id: id, size: size });
+  var url = id ? coverUrl(id, size) : PLACEHOLDER;
+  img.setAttribute('data-src', url);
+  lazyCovers.push({ img: img, url: url });
+}
+/* a cached list put back on screen: every cover that never started
+   loading while it was detached goes back into the lazy pool */
+function requeueCovers(root) {
+  var imgs = root.getElementsByTagName('img'), i, u;
+  for (i = 0; i < imgs.length; i++) {
+    u = imgs[i].getAttribute('data-src');
+    if (u && !imgs[i].getAttribute('src')) lazyCovers.push({ img: imgs[i], url: u });
+  }
 }
 function pumpLazyCovers() {
   var vh = window.innerHeight || 768, keep = [], i, it, r;
@@ -805,7 +921,7 @@ function pumpLazyCovers() {
     it = lazyCovers[i];
     if (!document.body.contains(it.img)) continue;
     r = it.img.getBoundingClientRect();
-    if (r.bottom > -500 && r.top < vh + 500) queueCover(it.img, it.id ? coverUrl(it.id, it.size) : PLACEHOLDER);
+    if (r.bottom > -500 && r.top < vh + 500) queueCover(it.img, it.url);
     else keep.push(it);
   }
   lazyCovers = keep;
@@ -871,8 +987,56 @@ function setStatus(msg, isErr) {
   e.className = isErr ? 'err' : '';
   e.appendChild(document.createTextNode(msg));
 }
-var navStack = [];
+/* Navigation. Each drill-down level keeps the list it left behind
+   (the <ul> node itself, with its rows, closures, "show more" progress
+   and scroll offset): Back puts it back as it was instead of
+   re-requesting and re-rendering from the top. viewSeq ticks on every
+   view change so responses for a view already left are dropped. */
+var navStack = [], savedLists = [], viewSeq = 0;
 function clearList() { var l = $('list'); while (l.firstChild) l.removeChild(l.firstChild); }
+function freshList() {
+  var old = $('list'), ul = document.createElement('ul');
+  ul.id = 'list';
+  old.parentNode.replaceChild(ul, old);
+  return old;
+}
+/* list views never show the "加载中" text (they show a skeleton), so
+   the only status they own is an error — never the watchdog's */
+function clearListStatus() { if (!wdStatusShown) setStatus('', false); }
+function skeleton(kind) {
+  var i, n = kind === 'cards' ? 8 : 9;
+  for (i = 0; i < n; i++) {
+    addRow(function (li) {
+      if (kind === 'cards') {
+        li.className = 'card skel';
+        li.appendChild(el('div', 'cv'));
+        li.appendChild(el('div', 'sk skL1'));
+      } else {
+        li.className = 'song skel';
+        li.appendChild(el('div', 'sk skTh'));
+        var t = el('div', 'txt');
+        t.appendChild(el('div', 'sk skL1'));
+        t.appendChild(el('div', 'sk skL2'));
+        li.appendChild(t);
+      }
+    });
+  }
+}
+/* request + render for a list view: the list is cleared at once and
+   shows a skeleton (stale rows can't be tapped while loading); the
+   answer only renders if the view is still the one that asked */
+function listApi(endpoint, params, ok, kind) {
+  var seq = viewSeq;
+  clearList();
+  skeleton(kind);
+  api(endpoint, params, function (root) {
+    clearList();
+    clearListStatus();
+    ok(root);
+    pumpLazyCovers();
+    syncAz();
+  }, function () { clearList(); }, true, function () { return seq === viewSeq; });
+}
 function showCrumb(title) {
   if (navStack.length > 0) {
     $('crumb').style.display = 'block';
@@ -882,16 +1046,44 @@ function showCrumb(title) {
   }
 }
 function openView(title, builder) {
+  viewSeq++;
+  /* read the offset before the swap: the empty list shrinks the page
+     and the browser clamps the scroll to 0 */
+  var y = window.pageYOffset || 0;
+  savedLists.push({ ul: freshList(), y: y });
   navStack.push({ title: title, builder: builder });
   showCrumb(title);
+  clearListStatus();
+  syncAz();
   window.scrollTo(0, 0);
   builder();
 }
 function goRoot(builder) {
+  viewSeq++;
   navStack = [];
+  savedLists = [];
+  freshList();
   showCrumb('');
+  clearListStatus();
+  syncAz();
   window.scrollTo(0, 0);
   builder();
+}
+function goBack() {
+  if (!navStack.length) return;
+  viewSeq++;
+  navStack.pop();
+  var sv = savedLists.pop();
+  showCrumb(navStack.length ? navStack[navStack.length - 1].title : '');
+  clearListStatus();
+  if (!sv) { if (navStack.length) navStack[navStack.length - 1].builder(); else setTab(currentTab); return; }
+  var cur = $('list');
+  cur.parentNode.replaceChild(sv.ul, cur);
+  refreshPlayingMarks();
+  requeueCovers(sv.ul);
+  syncAz();
+  window.scrollTo(0, sv.y);
+  pumpLazyCovers();
 }
 function addRow(build) {
   var li = document.createElement('li');
@@ -900,7 +1092,7 @@ function addRow(build) {
   return li;
 }
 function sectionRow(text) {
-  addRow(function (li) {
+  return addRow(function (li) {
     li.className = 'section';
     li.appendChild(document.createTextNode(text));
   });
@@ -921,7 +1113,7 @@ function navRow(title, sub, coverId, onTap, round, artPh) {
     if (coverId || artPh) {
       var img = document.createElement('img');
       img.alt = '';
-      setCover(img, coverId, 100);
+      lazyCover(img, coverId, 100);
       li.appendChild(img);
     } else {
       li.appendChild(el('span', 'ph', (title || '?').charAt(0)));
@@ -939,7 +1131,7 @@ function cardRow(title, sub, coverId, onTap) {
     var cv = el('div', 'cv');
     var img = document.createElement('img');
     img.alt = '';
-    setCover(img, coverId, 300);
+    lazyCover(img, coverId, 300);
     cv.appendChild(img);
     li.appendChild(cv);
     li.appendChild(el('div', 't', title || ''));
@@ -952,6 +1144,10 @@ function songRow(song, songs, opts) {
   opts = opts || {};
   var li = addRow(function (e) {
     var base = 'song';
+    var more = el('span', 'more');
+    more.appendChild(iconSvg('', '<circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle>'));
+    more.onclick = function (ev) { ev.stopPropagation(); openSheet(song); };
+    e.appendChild(more);
     e.appendChild(el('span', 'dur', fmtTime(song.duration)));
     if (opts.num) {
       var n = el('span', 'num');
@@ -1041,8 +1237,7 @@ function songMeta(n, dur) {
 
 /* ================= Views ================= */
 function vPlaylists() {
-  api('getPlaylists', {}, function (root) {
-    clearList();
+  listApi('getPlaylists', {}, function (root) {
     var pls = asArray(root.playlists && root.playlists.playlist);
     var i;
     if (pls.length === 0) emptyRow('没有歌单');
@@ -1053,19 +1248,19 @@ function vPlaylists() {
         });
       })(pls[i]);
     }
-  }, function () { clearList(); });
+  });
 }
 function vPlaylistSongs(id) {
-  api('getPlaylist', { id: id }, function (root) {
-    clearList();
+  listApi('getPlaylist', { id: id }, function (root) {
     var pl = root.playlist || {};
     var songs = asArray(pl.entry);
     heroRow('歌单', pl.name || '', pl.comment || '', songMeta(songs.length, pl.duration), pl.coverArt, songs);
     songRows(songs);
-  }, function () { clearList(); });
+  });
 }
 function openAlbum(al) {
   openView(al.name || al.title, function () { vAlbum(al.id); });
+  navStack[navStack.length - 1].albumId = al.id;
 }
 function albumRow(al) {
   navRow(al.name || al.title, (al.artist || '') + (al.year ? ' · ' + al.year : ''), al.coverArt, function () { openAlbum(al); }, false, true);
@@ -1073,25 +1268,79 @@ function albumRow(al) {
 function albumCard(al) {
   cardRow(al.name || al.title, (al.artist || '') + (al.year ? ' · ' + al.year : ''), al.coverArt, function () { openAlbum(al); });
 }
-function vAlbums() {
-  api('getAlbumList2', { type: 'newest', size: 60 }, function (root) {
-    clearList();
-    var albums = asArray(root.albumList2 && root.albumList2.album);
+/* Albums tab: sort pills over the grid (getAlbumList2 types), paged
+   60 at a time behind a "show more" row. The chosen sort is kept. */
+var ALBUM_SORTS = [
+  { type: 'newest', label: '最新' },
+  { type: 'recent', label: '最近播放' },
+  { type: 'frequent', label: '最常播放' },
+  { type: 'random', label: '随机' },
+  { type: 'alphabeticalByName', label: 'A–Z' }
+];
+var ALBUM_PAGE = 60;
+var albumSort = 'newest';
+try { albumSort = localStorage.getItem('submini-album-sort') || 'newest'; } catch (e) {}
+function albumSortRow() {
+  addRow(function (li) {
+    li.className = 'segRow';
     var i;
-    if (albums.length === 0) emptyRow('没有专辑');
-    sectionRow('最新专辑');
-    for (i = 0; i < albums.length; i++) albumCard(albums[i]);
-  }, function () { clearList(); });
+    for (i = 0; i < ALBUM_SORTS.length; i++) {
+      (function (so) {
+        var b = el('button', so.type === albumSort ? 'on' : '', so.label);
+        b.onclick = function () {
+          if (so.type === albumSort && so.type !== 'random') return;
+          albumSort = so.type;
+          try { localStorage.setItem('submini-album-sort', albumSort); } catch (e) {}
+          goRoot(vAlbums);
+        };
+        li.appendChild(b);
+      })(ALBUM_SORTS[i]);
+    }
+  });
 }
+function vAlbums() {
+  var type = albumSort, offset = 0, moreLi = null;
+  function addPage(albums) {
+    var i;
+    for (i = 0; i < albums.length; i++) albumCard(albums[i]);
+    offset += albums.length;
+    /* random has no stable order to page through: "more" would only
+       repeat albums — the pill re-rolls instead */
+    if (albums.length === ALBUM_PAGE && type !== 'random') {
+      moreLi = addRow(function (li) {
+        li.className = 'moreRow';
+        var b = el('button', 'miniBtn', '显示更多');
+        li.appendChild(b);
+        b.onclick = function () {
+          var ul = $('list');
+          b.disabled = true;
+          setText2(b, '加载中…');
+          api('getAlbumList2', { type: type, size: ALBUM_PAGE, offset: offset }, function (root) {
+            if (moreLi.parentNode) moreLi.parentNode.removeChild(moreLi);
+            addPage(asArray(root.albumList2 && root.albumList2.album));
+            pumpLazyCovers();
+          }, function () { b.disabled = false; setText2(b, '显示更多'); }, true,
+          function () { return $('list') === ul; });
+        };
+      });
+    }
+  }
+  listApi('getAlbumList2', { type: type, size: ALBUM_PAGE }, function (root) {
+    var albums = asArray(root.albumList2 && root.albumList2.album);
+    albumSortRow();
+    if (albums.length === 0) { emptyRow(type === 'recent' || type === 'frequent' ? '还没有播放记录' : '没有专辑'); return; }
+    addPage(albums);
+  }, 'cards');
+}
+function setText2(e, text) { e.innerHTML = ''; e.appendChild(document.createTextNode(text)); }
 function vAlbum(id) {
-  api('getAlbum', { id: id }, function (root) {
-    clearList();
+  listApi('getAlbum', { id: id }, function (root) {
     var al = root.album || {};
     var songs = asArray(al.song);
     heroRow('专辑', al.name || '', (al.artist || '') + (al.year ? ' · ' + al.year : ''),
             songMeta(songs.length, al.duration), al.coverArt, songs);
     songRows(songs, { num: true });
-  }, function () { clearList(); });
+  });
 }
 function artistRow(ar) {
   navRow(ar.name, (ar.albumCount || 0) + ' 张专辑', ar.coverArt, function () {
@@ -1099,18 +1348,19 @@ function artistRow(ar) {
   }, true);
 }
 function vArtists() {
-  api('getArtists', {}, function (root) {
-    clearList();
+  listApi('getArtists', {}, function (root) {
     var indexes = asArray(root.artists && root.artists.index);
     /* Flatten to a (section, artist) plan and render 100 artists at a
        time behind a "show more" row: this library has ~1900 artists,
        and one page of ~1900 rows — each with a cover request — is
-       what wedged image loading for every view opened after it. */
-    var plan = [], i, j;
+       what wedged image loading for every view opened after it.
+       The A–Z bar renders on demand up to the tapped letter. */
+    var plan = [], letters = [], secLi = {}, i, j;
     for (i = 0; i < indexes.length; i++) {
       var artists = asArray(indexes[i].artist);
       if (artists.length === 0) continue;
       plan.push({ sec: indexes[i].name || '' });
+      letters.push(indexes[i].name || '');
       for (j = 0; j < artists.length; j++) plan.push({ ar: artists[j] });
     }
     if (plan.length === 0) { emptyRow('没有歌手'); return; }
@@ -1122,7 +1372,7 @@ function vArtists() {
       while (pos < plan.length && n < 100) {
         var it = plan[pos++];
         if (it.ar) { artistRow(it.ar); n++; }
-        else sectionRow(it.sec);
+        else secLi[it.sec] = sectionRow(it.sec);
       }
       if (pos < plan.length) {
         var left = 0, k;
@@ -1130,37 +1380,50 @@ function vArtists() {
         moreLi = addRow(function (li) {
           li.className = 'nav';
           li.appendChild(el('div', 't', '显示更多（还剩 ' + left + ' 位歌手）'));
-          li.onclick = renderChunk;
+          li.onclick = function () { renderChunk(); pumpLazyCovers(); };
         });
       }
     }
     renderChunk();
-  }, function () { clearList(); });
+    var ul = $('list');
+    ul.azLetters = letters;
+    ul.azJump = function (name) {
+      while (!secLi[name] && pos < plan.length) renderChunk();
+      var li = secLi[name];
+      if (!li) return;
+      var head = $('tabs').offsetHeight;
+      window.scrollTo(0, li.getBoundingClientRect().top + (window.pageYOffset || 0) - head - 4);
+      pumpLazyCovers();
+    };
+  });
 }
 function vArtist(id) {
-  api('getArtist', { id: id }, function (root) {
-    clearList();
+  listApi('getArtist', { id: id }, function (root) {
     var albums = asArray(root.artist && root.artist.album);
     var i;
     if (albums.length === 0) emptyRow('没有专辑');
     else sectionRow(albums.length + ' 张专辑');
     for (i = 0; i < albums.length; i++) albumCard(albums[i]);
-  }, function () { clearList(); });
+  }, 'cards');
 }
 function vRandom() {
-  api('getRandomSongs', { size: 50 }, function (root) {
-    clearList();
+  listApi('getRandomSongs', { size: 50 }, function (root) {
     var songs = asArray(root.randomSongs && root.randomSongs.song);
     heroRow('随机', '随便听听', '从曲库里随机抽取', songMeta(songs.length, 0), songs.length ? songs[0].coverArt : null, songs);
     songRows(songs);
-  }, function () { clearList(); });
+  });
 }
 function doSearch() {
   var q = $('searchInput').value;
   if (!q) return;
   $('searchInput').blur();
-  api('search3', { query: q, artistCount: 10, albumCount: 20, songCount: 50 }, function (root) {
-    clearList();
+  /* a new search replaces whatever was drilled into from the last one */
+  viewSeq++;
+  navStack = [];
+  savedLists = [];
+  showCrumb('');
+  window.scrollTo(0, 0);
+  listApi('search3', { query: q, artistCount: 10, albumCount: 20, songCount: 50 }, function (root) {
     var r = root.searchResult3 || {};
     var songs = asArray(r.song), albums = asArray(r.album), artists = asArray(r.artist);
     var i;
@@ -1168,8 +1431,74 @@ function doSearch() {
     if (songs.length) { sectionRow('歌曲'); songRows(songs); }
     if (albums.length) { sectionRow('专辑'); for (i = 0; i < albums.length; i++) albumRow(albums[i]); }
     if (artists.length) { sectionRow('歌手'); for (i = 0; i < artists.length; i++) artistRow(artists[i]); }
-  }, function () { clearList(); });
+  });
 }
+
+/* A–Z index for the artists list: shown whenever the list on screen
+   carries azLetters (set by vArtists; survives the navigation cache
+   because it lives on the <ul> node). Tap or drag along the bar. */
+var azCur = '';
+function syncAz() {
+  var ul = $('list'), bar = $('azBar');
+  var letters = ul.azLetters;
+  if (!letters || !letters.length) {
+    bar.style.display = 'none';
+    removeClass(document.body, 'hasAz');
+    return;
+  }
+  bar.innerHTML = '';
+  var i;
+  /* index names are letters, '#', ranges like "X-Z" or "[Unknown]":
+     anything longer than a glyph or two would not fit the 30px bar */
+  for (i = 0; i < letters.length; i++) bar.appendChild(el('span', '', azLabel(letters[i])));
+  bar.style.display = 'block';
+  addClass(document.body, 'hasAz');
+  layoutAz();
+}
+function azLabel(n) {
+  if (n.length <= 2) return n;
+  return n.charAt(0) === '[' ? '?' : n.charAt(0);
+}
+function layoutAz() {
+  var bar = $('azBar'), sp = bar.childNodes, n = sp.length, i;
+  if (!n || bar.style.display === 'none') return;
+  var h = Math.min(Math.floor(bar.offsetHeight / n), 26);
+  bar.style.paddingTop = Math.max(0, Math.floor((bar.offsetHeight - h * n) / 2)) + 'px';
+  for (i = 0; i < n; i++) { sp[i].style.height = h + 'px'; sp[i].style.lineHeight = h + 'px'; }
+}
+window.addEventListener('resize', layoutAz, false);
+function azAt(clientY) {
+  var bar = $('azBar'), sp = bar.childNodes, i, r;
+  for (i = 0; i < sp.length; i++) {
+    r = sp[i].getBoundingClientRect();
+    if (clientY < r.bottom) return i;
+  }
+  return sp.length - 1;
+}
+function azPick(clientY) {
+  var ul = $('list'), sp = $('azBar').childNodes;
+  if (!ul.azJump || !sp.length) return;
+  var i = azAt(clientY), name = ul.azLetters[i];
+  if (name === azCur) return;
+  var k;
+  for (k = 0; k < sp.length; k++) sp[k].className = k === i ? 'on' : '';
+  azCur = name;
+  ul.azJump(name);
+}
+$('azBar').addEventListener('touchstart', function (e) {
+  e.preventDefault();
+  azCur = '';
+  azPick(e.touches[0].clientY);
+}, false);
+$('azBar').addEventListener('touchmove', function (e) {
+  e.preventDefault();
+  azPick(e.touches[0].clientY);
+}, false);
+$('azBar').addEventListener('touchend', function () {
+  var sp = $('azBar').childNodes, k;
+  for (k = 0; k < sp.length; k++) sp[k].className = '';
+}, false);
+$('azBar').onclick = function (e) { azCur = ''; azPick(e.clientY); };
 
 /* ================= Theme: colours sampled from the cover ================= */
 /* The cover goes through the same-origin /rest proxy, so the canvas is
@@ -1279,7 +1608,11 @@ function applyTheme(t) {
     '#ctlRow #shuffleBtn.on, #ctlRow #repeatBtn.on { background: ' + rgba(acc, 0.26) + '; }' +
     '#ctlRow #shuffleBtn.on .icS, #ctlRow #repeatBtn.on .icS, #player.full #ctlRow #shuffleBtn.on .icS, #player.full #ctlRow #repeatBtn.on .icS { stroke: ' + accCss + '; }' +
     '#ctlRow #repeatBtn.on .repOne { fill: ' + accCss + '; }' +
-    '#ctlRow #shuffleBtn.on:after, #ctlRow #repeatBtn.on:after { background: ' + accCss + '; }';
+    '#ctlRow #shuffleBtn.on:after, #ctlRow #repeatBtn.on:after { background: ' + accCss + '; }' +
+    'ul#list li.hero .hb button.pri { background: ' + accCss + '; box-shadow: 0 8px 20px ' + rgba(acc, 0.25) + '; }' +
+    '#searchBtn, ul#list li.segRow button.on { background: ' + accCss + '; }' +
+    '#searchInput:focus { border-color: ' + accCss + '; }' +
+    '#azBar span.on, #toast button { color: ' + accCss + '; }';
 }
 function themeFor(song) {
   var key = song && song.coverArt ? song.coverArt : '';
@@ -1339,7 +1672,8 @@ function saveLocalState() {
     var slim = [], i, s;
     for (i = 0; i < queue.length; i++) {
       s = queue[i];
-      slim.push({ id: s.id, title: s.title, artist: s.artist, album: s.album, duration: s.duration, coverArt: s.coverArt });
+      slim.push({ id: s.id, title: s.title, artist: s.artist, album: s.album, duration: s.duration, coverArt: s.coverArt,
+                  albumId: s.albumId, artistId: s.artistId });
     }
     localStorage.setItem(STATE_KEY, JSON.stringify({
       q: slim, i: qIndex, pos: audio.currentTime || 0, t: new Date().getTime()
@@ -1461,6 +1795,7 @@ function showSong(s) {
 }
 function playAt(i) {
   if (i < 0 || i >= queue.length) return;
+  upNextId = null;
   qIndex = i;
   var song = queue[i];
   nowPlayingId = song.id;
@@ -1502,8 +1837,11 @@ var repeatOne = false;
 function setShuffle(on) {
   shuffleOn = on;
   $('shuffleBtn').className = on ? 'on' : '';
+  if (fullMode) renderQueue();
 }
+var upNextId = null;
 function next(auto) {
+  if (upNextId && queue[qIndex + 1] && queue[qIndex + 1].id === upNextId) { playAt(qIndex + 1); return; }
   if (shuffleOn && queue.length > 1) {
     var n = qIndex;
     while (n === qIndex) n = Math.floor(Math.random() * queue.length);
@@ -2425,6 +2763,13 @@ function renderQueue() {
       var s = queue[idx];
       var li = document.createElement('li');
       if (idx === qIndex) li.className = 'playing';
+      else if (!shuffleOn && qIndex >= 0 && idx < qIndex) li.className = 'done';
+      if (idx !== qIndex) {
+        var qx = el('span', 'qx');
+        qx.appendChild(iconSvg('', '<line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line>'));
+        qx.onclick = function (ev) { ev.stopPropagation(); queueRemove(idx); };
+        li.appendChild(qx);
+      }
       li.appendChild(el('span', 'qd', fmtTime(s.duration)));
       var qi = el('span', 'qi');
       if (idx === qIndex) qi.appendChild(eqIcon());
@@ -2472,6 +2817,16 @@ $('refreshQueueBtn').onclick = function () {
     var songs = asArray(root.randomSongs && root.randomSongs.song);
     if (!songs.length) return;
     var curId = nowPlayingId, i;
+    var oldQ = queue, oldIdx = qIndex;
+    toast('已换一批', '撤销', function () {
+      queue = oldQ;
+      qIndex = queueIndexOf(nowPlayingId);
+      if (qIndex < 0 && !nowPlayingId) qIndex = oldIdx;
+      renderQueue();
+      scrollQueueToCurrent();
+      if (!nowPlayingId && queue.length) showSong(queue[0]);
+      saveState();
+    });
     queue = songs.slice(0);
     qIndex = -1;
     if (curId) {
@@ -2483,6 +2838,157 @@ $('refreshQueueBtn').onclick = function () {
     if (!curId) showSong(queue[0]);
   }, function () { btn.disabled = false; }, true);
 };
+
+/* ================= Toast ================= */
+var toastTimer = null;
+function toast(msg, actLabel, act) {
+  setText('toastMsg', msg);
+  var b = $('toastAct');
+  if (actLabel) {
+    setText('toastAct', actLabel);
+    b.style.display = 'inline';
+    b.onclick = function () { hideToast(); act(); };
+  } else {
+    b.style.display = 'none';
+    b.onclick = null;
+  }
+  $('toastWrap').style.display = 'block';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, actLabel ? 5000 : 2200);
+}
+function hideToast() {
+  clearTimeout(toastTimer);
+  $('toastWrap').style.display = 'none';
+}
+
+/* ================= Queue edits ================= */
+function queueIndexOf(id) {
+  var i;
+  if (!id) return -1;
+  for (i = 0; i < queue.length; i++) if (queue[i].id === id) return i;
+  return -1;
+}
+function queueChanged() {
+  renderQueue();
+  saveState();
+}
+/* nothing loaded yet: the label previews the head of the queue, which
+   the Play button starts — keep that preview in step with edits */
+function queuePreview() {
+  if (!audio.getAttribute('src') && queue.length) showSong(queue[0]);
+}
+function queueInsertNext(song) {
+  if (song.id === nowPlayingId) { toast('正在播放这首'); return; }
+  var at = queueIndexOf(song.id);
+  if (at >= 0) {
+    queue.splice(at, 1);
+    if (at < qIndex) qIndex--;
+  }
+  queue.splice(qIndex + 1, 0, song);
+  upNextId = song.id;
+  queuePreview();
+  queueChanged();
+  toast('下一首播放：' + clipText(song.title || '', 18));
+}
+function queueAppend(song) {
+  if (queueIndexOf(song.id) >= 0) { toast('已经在队列里了'); return; }
+  queue.push(song);
+  queuePreview();
+  queueChanged();
+  toast('已加到队列末尾');
+}
+function queueRemove(idx) {
+  if (idx === qIndex || idx < 0 || idx >= queue.length) return;
+  var s = queue[idx];
+  queue.splice(idx, 1);
+  if (idx < qIndex) qIndex--;
+  if (s.id === upNextId) upNextId = null;
+  queuePreview();
+  queueChanged();
+  toast('已移除：' + clipText(s.title || '', 18), '撤销', function () {
+    if (queueIndexOf(s.id) >= 0) return;
+    var at = Math.min(idx, queue.length);
+    queue.splice(at, 0, s);
+    if (at <= qIndex) qIndex++;
+    queuePreview();
+    queueChanged();
+  });
+}
+
+/* ================= Jump to album / artist ================= */
+function goAlbum(id, name) {
+  if (!id) return;
+  if (fullMode) setFull(false);
+  openAlbum({ id: id, name: name || '专辑' });
+}
+function goArtist(id, name) {
+  if (!id) return;
+  if (fullMode) setFull(false);
+  openView(name || '歌手', function () { vArtist(id); });
+}
+function curSong() { return qIndex >= 0 ? queue[qIndex] : null; }
+/* in the fullscreen player only (in the bar, a tap on the info opens
+   the player); stopPropagation, or #npInfo's handler would reopen the
+   player this just collapsed */
+$('npArtist').onclick = function (e) {
+  var s = curSong();
+  if (!fullMode || !s || !s.artistId) return;
+  e.stopPropagation();
+  goArtist(s.artistId, s.artist);
+};
+$('npAlbum').onclick = function (e) {
+  var s = curSong();
+  if (!fullMode || !s || !s.albumId) return;
+  e.stopPropagation();
+  goAlbum(s.albumId, s.album);
+};
+
+/* ================= Action sheet (song "⋯") ================= */
+function sheetBtn(label, fn) {
+  var b = el('button', '', label);
+  b.onclick = function () { closeSheet(); fn(); };
+  $('shBtns').appendChild(b);
+}
+function openSheet(song) {
+  $('shBtns').innerHTML = '';
+  setText('shTitle', song.title || '');
+  setText('shSub', (song.artist || '') + (song.album ? ' · ' + song.album : ''));
+  setCover($('shCover'), song.coverArt, 100);
+  sheetBtn('下一首播放', function () { queueInsertNext(song); });
+  sheetBtn('加到队列末尾', function () { queueAppend(song); });
+  /* no "view album" from inside that very album */
+  var top = navStack.length ? navStack[navStack.length - 1] : null;
+  if (song.albumId && !(top && top.albumId === song.albumId)) {
+    sheetBtn('查看专辑：' + (song.album || ''), function () { goAlbum(song.albumId, song.album); });
+  }
+  if (song.artistId) {
+    sheetBtn('查看歌手：' + (song.artist || ''), function () { goArtist(song.artistId, song.artist); });
+  }
+  $('sheetMask').style.display = 'block';
+  $('sheet').style.display = 'block';
+}
+function closeSheet() {
+  $('sheetMask').style.display = 'none';
+  $('sheet').style.display = 'none';
+}
+$('sheetMask').onclick = closeSheet;
+$('shCancel').onclick = closeSheet;
+
+/* ================= Settings popover ================= */
+var logoutArmTimer = null;
+function disarmLogout() {
+  clearTimeout(logoutArmTimer);
+  $('logoutBtn').className = '';
+  setText('logoutBtn', '退出登录');
+}
+function showSettings(on) {
+  $('setPanel').style.display = on ? 'block' : 'none';
+  $('setMask').style.display = on ? 'block' : 'none';
+  $('setBtn').className = on ? 'on' : '';
+  if (!on) disarmLogout();
+}
+$('setBtn').onclick = function () { showSettings($('setPanel').style.display === 'none'); };
+$('setMask').onclick = function () { showSettings(false); };
 
 /* ================= Tabs / nav / login ================= */
 var currentTab = 'playlists';
@@ -2496,7 +3002,7 @@ function setTab(name) {
   else if (name === 'albums') goRoot(vAlbums);
   else if (name === 'artists') goRoot(vArtists);
   else if (name === 'random') goRoot(vRandom);
-  else if (name === 'search') { navStack = []; showCrumb(''); clearList(); }
+  else if (name === 'search') goRoot(function () {});
 }
 $('tabPlaylists').onclick = function () { setTab('playlists'); };
 $('tabAlbums').onclick = function () { setTab('albums'); };
@@ -2505,13 +3011,19 @@ $('tabRandom').onclick = function () { setTab('random'); };
 $('tabSearch').onclick = function () { setTab('search'); };
 $('searchBtn').onclick = doSearch;
 $('searchInput').onkeydown = function (e) { if (e.keyCode === 13) doSearch(); };
-$('backBtn').onclick = function () {
-  navStack.pop();
-  showCrumb(navStack.length ? navStack[navStack.length - 1].title : '');
-  if (navStack.length) navStack[navStack.length - 1].builder();
-  else setTab(currentTab);
-};
+$('backBtn').onclick = goBack;
+/* logging out wipes the saved connection and queue on the server:
+   two taps — the first arms the button, which disarms after 3s */
 $('logoutBtn').onclick = function () {
+  var b = $('logoutBtn');
+  if (b.className !== 'arm') {
+    b.className = 'arm';
+    setText('logoutBtn', '再点一次确认退出');
+    clearTimeout(logoutArmTimer);
+    logoutArmTimer = setTimeout(disarmLogout, 3000);
+    return;
+  }
+  showSettings(false);
   postJSON('/api/disconnect', {}, function () {}, function () {});
   clearState();
   wdSuspend = true;
