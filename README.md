@@ -8,11 +8,11 @@
 
 全屏播放器（Walkman 磁带机 + 播放队列）：
 
-![全屏播放器](docs/screenshot-player.jpg)
+![全屏播放器](https://raw.githubusercontent.com/playwjj/submini/main/docs/screenshot-player.jpg)
 
 曲库随机页 + 底部迷你播放条：
 
-![曲库与迷你播放条](docs/screenshot-library.jpg)
+![曲库与迷你播放条](https://raw.githubusercontent.com/playwjj/submini/main/docs/screenshot-library.jpg)
 
 ## 运行
 
