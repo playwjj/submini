@@ -14,6 +14,12 @@
 
 ![曲库与迷你播放条](https://raw.githubusercontent.com/playwjj/submini/main/docs/screenshot-library.jpg)
 
+装框上桌（平时就立在桌上：播歌时是播放器，停播几分钟后自动切换成画框屏保）：
+
+![装框实机：播放中](https://raw.githubusercontent.com/playwjj/submini/main/docs/photo-frame-player.jpg)
+
+![装框实机：屏保画作](https://raw.githubusercontent.com/playwjj/submini/main/docs/photo-frame-screensaver.jpg)
+
 ## 运行
 
 镜像由 GitHub Actions 在打 `v*` 标签时构建，推送到 Docker Hub（`passport888/submini`）与 GHCR。家里部署只需拉镜像：
